@@ -8,6 +8,7 @@ const logger = require('./utils/logger');
 const { authMiddleware } = require('./middleware/auth');
 const sessionStore = require('./services/sessionStore');
 const inlineKeyboards = require('./keyboards/inlineKeyboards');
+const { formatTransactionSummary } = require('./utils/formatter');
 
 // Import Handlers
 const { showMainMenu, showHelp } = require('./handlers/menuHandler');
@@ -153,12 +154,150 @@ bot.on('callback_query', async (ctx) => {
 
   logger.debug(`User ${userId} clicked callback: ${data}`);
 
-  // Global Cancel Action
+  // Global Cancel Action: Prompt user for confirmation if entry is in-progress
   if (data === 'action_cancel') {
+    const session = sessionStore.get(userId);
+    if (session && session.flow) {
+      try {
+        await ctx.answerCbQuery();
+        return await ctx.editMessageText(
+          `⚠️ <b>Are you sure you want to cancel?</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━━\n` +
+          `Your in-progress entry will be discarded.\n` +
+          `No changes have been saved to Google Sheets yet.`,
+          {
+            parse_mode: 'HTML',
+            ...inlineKeyboards.cancelConfirmation()
+          }
+        );
+      } catch (e) {
+        return ctx.replyWithHTML(
+          `⚠️ <b>Are you sure you want to cancel?</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━━\n` +
+          `Your in-progress entry will be discarded.`,
+          inlineKeyboards.cancelConfirmation()
+        );
+      }
+    }
+
+    // No active session: show clean cancellation notice
     sessionStore.clear(userId);
     try {
-      await ctx.answerCbQuery('Action cancelled');
+      await ctx.answerCbQuery('Cancelled');
+      return await ctx.editMessageText(
+        `🚫 <b>Action Cancelled</b>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━\n` +
+        `No changes were made to your Google Sheets ledger.`,
+        {
+          parse_mode: 'HTML',
+          ...inlineKeyboards.cancelledNotice()
+        }
+      );
+    } catch (e) {
+      return ctx.replyWithHTML(
+        `🚫 <b>Action Cancelled</b>\nNo changes were made.`,
+        inlineKeyboards.cancelledNotice()
+      );
+    }
+  }
+
+  // User confirms cancellation
+  if (data === 'action_cancel_confirmed') {
+    sessionStore.clear(userId);
+    try {
+      await ctx.answerCbQuery('Entry cancelled');
+      return await ctx.editMessageText(
+        `🚫 <b>Entry Cancelled Successfully</b>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━\n` +
+        `Your in-progress transaction has been cancelled.\n` +
+        `Nothing was saved to your Google Sheets ledger.`,
+        {
+          parse_mode: 'HTML',
+          ...inlineKeyboards.cancelledNotice()
+        }
+      );
+    } catch (e) {
+      return ctx.replyWithHTML(
+        `🚫 <b>Entry Cancelled Successfully</b>\nNothing was saved.`,
+        inlineKeyboards.cancelledNotice()
+      );
+    }
+  }
+
+  // User chooses to keep editing / resume
+  if (data === 'action_cancel_resume') {
+    try {
+      await ctx.answerCbQuery('Resuming...');
     } catch (e) {}
+    const session = sessionStore.get(userId);
+    if (!session) return showMainMenu(ctx, true);
+
+    if (session.flow === 'INCOME') {
+      if (session.step === 'SELECT_CATEGORY') return startIncomeFlow(ctx);
+      if (session.step === 'AWAITING_AMOUNT') {
+        return ctx.editMessageText(`➕ <b>Income: ${session.data.category}</b>\n\n💵 <b>Enter income amount in ₹:</b>`, { parse_mode: 'HTML', ...inlineKeyboards.cancelOnly() });
+      }
+      if (session.step === 'AWAITING_SOURCE') {
+        return ctx.editMessageText(`👤 <b>Enter Customer/Source Name:</b>`, { parse_mode: 'HTML', ...inlineKeyboards.cancelOnly() });
+      }
+      if (session.step === 'AWAITING_DATE') {
+        return ctx.editMessageText(`📅 <b>Select Transaction Date:</b>`, { parse_mode: 'HTML', ...inlineKeyboards.dateSelection() });
+      }
+      if (session.step === 'AWAITING_NOTE') {
+        return ctx.editMessageText(`📝 <b>Optional note or click Skip:</b>`, { parse_mode: 'HTML', ...inlineKeyboards.skipOptionalNote() });
+      }
+      if (session.step === 'CONFIRMATION') {
+        return ctx.editMessageText(formatTransactionSummary(session.data), { parse_mode: 'HTML', ...inlineKeyboards.confirmTransaction() });
+      }
+    }
+
+    if (session.flow === 'WAGES') {
+      if (session.step === 'SELECT_EMPLOYEE') return startWagesFlow(ctx);
+      if (session.step === 'AWAITING_WAGE_AMOUNT') {
+        return ctx.editMessageText(`👷 Employee: <b>${session.data.employeeName}</b>\n\n💵 <b>Enter daily wage amount in ₹:</b>`, { parse_mode: 'HTML', ...inlineKeyboards.cancelOnly() });
+      }
+      if (session.step === 'AWAITING_DATE') {
+        return ctx.editMessageText(`📅 <b>Select Payment Date:</b>`, { parse_mode: 'HTML', ...inlineKeyboards.dateSelection() });
+      }
+      if (session.step === 'AWAITING_NOTE') {
+        return ctx.editMessageText(`📝 <b>Optional note or click Skip:</b>`, { parse_mode: 'HTML', ...inlineKeyboards.skipOptionalNote() });
+      }
+      if (session.step === 'CONFIRMATION') {
+        return ctx.editMessageText(formatTransactionSummary(session.data), { parse_mode: 'HTML', ...inlineKeyboards.confirmTransaction() });
+      }
+    }
+
+    if (session.flow === 'EXPENSE') {
+      if (session.step === 'AWAITING_AMOUNT') {
+        return ctx.editMessageText(`➖ <b>Expense: ${session.data.category}</b>\n\n💵 <b>Enter expense amount in ₹:</b>`, { parse_mode: 'HTML', ...inlineKeyboards.cancelOnly() });
+      }
+      if (session.step === 'AWAITING_PURPOSE') {
+        return ctx.editMessageText(`🏢 <b>Enter Expense Purpose/Vendor:</b>`, { parse_mode: 'HTML', ...inlineKeyboards.cancelOnly() });
+      }
+      if (session.step === 'AWAITING_DATE') {
+        return ctx.editMessageText(`📅 <b>Select Transaction Date:</b>`, { parse_mode: 'HTML', ...inlineKeyboards.dateSelection() });
+      }
+      if (session.step === 'CONFIRMATION') {
+        return ctx.editMessageText(formatTransactionSummary(session.data), { parse_mode: 'HTML', ...inlineKeyboards.confirmTransaction() });
+      }
+    }
+
+    if (session.flow === 'TRAVEL') {
+      if (session.step === 'SELECT_PERSON') return startTravelFlow(ctx);
+      if (session.step === 'AWAITING_ROUTE') {
+        return ctx.editMessageText(`📍 <b>Enter route:</b>`, { parse_mode: 'HTML', ...inlineKeyboards.cancelOnly() });
+      }
+      if (session.step === 'AWAITING_PURPOSE') {
+        return ctx.editMessageText(`🎯 <b>Enter purpose:</b>`, { parse_mode: 'HTML', ...inlineKeyboards.cancelOnly() });
+      }
+      if (session.step === 'AWAITING_AMOUNT') {
+        return ctx.editMessageText(`💵 <b>Enter amount in ₹:</b>`, { parse_mode: 'HTML', ...inlineKeyboards.cancelOnly() });
+      }
+      if (session.step === 'CONFIRMATION') {
+        return ctx.editMessageText(formatTransactionSummary(session.data), { parse_mode: 'HTML', ...inlineKeyboards.confirmTransaction() });
+      }
+    }
+
     return showMainMenu(ctx, true);
   }
 

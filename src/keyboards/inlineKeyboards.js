@@ -245,6 +245,27 @@ const inlineKeyboards = {
   },
 
   /**
+   * Cancel confirmation keyboard
+   */
+  cancelConfirmation: () => {
+    return Markup.inlineKeyboard([
+      [
+        Markup.button.callback('❌ Yes, Cancel Entry', 'action_cancel_confirmed'),
+        Markup.button.callback('↩️ No, Keep Going', 'action_cancel_resume')
+      ]
+    ]);
+  },
+
+  /**
+   * Cancelled notice keyboard
+   */
+  cancelledNotice: () => {
+    return Markup.inlineKeyboard([
+      [Markup.button.callback('🏠 Back to Main Menu', 'action_main_menu')]
+    ]);
+  },
+
+  /**
    * Cancel button only
    */
   cancelOnly: () => {
