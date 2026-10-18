@@ -1,0 +1,31 @@
+{
+  "name": "rubber-business-telegram-bot",
+  "version": "1.0.0",
+  "description": "Telegram Income and Expense Tracker Bot for Rubber Business with Google Sheets ledger",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test"
+  },
+  "keywords": [
+    "telegram-bot",
+    "rubber-business",
+    "expense-tracker",
+    "income-tracker",
+    "google-sheets",
+    "accounting",
+    "render"
+  ],
+  "author": "Antigravity",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "telegraf": "^4.16.3"
+  }
+}
