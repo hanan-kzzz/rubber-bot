@@ -464,12 +464,27 @@ bot.on('text', async (ctx) => {
 const app = express();
 app.use(express.json());
 
+// Telegram Webhook Handler: uses handleUpdate with express.json()
+app.post('/webhook', async (req, res) => {
+  try {
+    if (!req.body || typeof req.body !== 'object') {
+      return res.sendStatus(400);
+    }
+    await bot.handleUpdate(req.body, res);
+  } catch (err) {
+    logger.error('Error processing Telegram webhook update:', err);
+    if (!res.headersSent) res.sendStatus(500);
+  }
+});
+
 // Health Check Endpoint (Render checks this to ensure app is alive)
 app.get('/', (req, res) => {
   res.json({
     status: 'ONLINE',
     service: 'Rubber Business Telegram Bot',
     timestamp: new Date().toISOString(),
+    mode: config.webhookDomain ? 'WEBHOOK' : 'POLLING',
+    webhookDomain: config.webhookDomain || 'None (Local Polling)',
     ownerConfigured: Boolean(config.ownerId),
     googleScriptConfigured: Boolean(config.googleScriptUrl)
   });
@@ -477,26 +492,25 @@ app.get('/', (req, res) => {
 
 async function startServer() {
   const port = config.port;
+  const webhookDomain = config.webhookDomain;
 
-  // Determine webhook vs polling
-  const webhookUrl = config.webhookDomain
-    ? `${config.webhookDomain.replace(/\/+$/, '')}/webhook`
-    : null;
-
-  if (webhookUrl && config.botToken) {
+  if (webhookDomain && config.botToken) {
+    const webhookUrl = `${webhookDomain.replace(/\/+$/, '')}/webhook`;
+    logger.info(`Setting up Telegram Webhook at: ${webhookUrl}`);
     try {
-      logger.info(`Configuring Telegram webhook at: ${webhookUrl}`);
-      app.use(bot.webhookCallback('/webhook'));
-      await bot.telegram.setWebhook(webhookUrl);
-      logger.info('Telegram webhook registered successfully.');
+      await bot.telegram.setWebhook(webhookUrl, {
+        allowed_updates: ['message', 'callback_query'],
+        drop_pending_updates: false
+      });
+      logger.info('Telegram webhook successfully set on Telegram servers.');
     } catch (whErr) {
-      logger.error('Failed to set webhook:', whErr);
+      logger.error('Failed to set Telegram webhook:', whErr);
     }
   } else if (config.botToken) {
-    logger.info('No webhook URL specified. Running bot in Long Polling mode...');
+    logger.info('No webhook domain detected. Running bot in Long Polling mode...');
     try {
       await bot.telegram.deleteWebhook({ drop_pending_updates: false });
-      logger.info('Checked and reset webhooks.');
+      logger.info('Reset webhooks for polling.');
     } catch (e) {
       logger.warn('Could not reset webhook:', e.message);
     }
@@ -515,6 +529,7 @@ async function startServer() {
 
   app.listen(port, () => {
     logger.info(`HTTP server is running on port ${port}`);
+    logger.info(`Mode: ${webhookDomain ? 'WEBHOOK (' + webhookDomain + ')' : 'POLLING'}`);
     logger.info(`Owner Telegram ID: ${config.ownerId || 'NOT SET'}`);
     logger.info(`Authorized Staff IDs: ${config.allowedStaffIds.length > 0 ? config.allowedStaffIds.join(', ') : 'None'}`);
   });

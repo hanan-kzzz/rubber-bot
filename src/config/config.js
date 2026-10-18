@@ -14,6 +14,20 @@ const parseNumberArray = (val) => {
     .filter(id => id !== null);
 };
 
+const getWebhookDomain = () => {
+  if (process.env.WEBHOOK_DOMAIN) {
+    const val = process.env.WEBHOOK_DOMAIN.trim();
+    return val.startsWith('http') ? val : `https://${val}`;
+  }
+  if (process.env.RENDER_EXTERNAL_URL) {
+    return process.env.RENDER_EXTERNAL_URL.trim();
+  }
+  if (process.env.RENDER_EXTERNAL_HOSTNAME) {
+    return `https://${process.env.RENDER_EXTERNAL_HOSTNAME.trim()}`;
+  }
+  return '';
+};
+
 const config = {
   // Telegram Bot Token
   botToken: process.env.BOT_TOKEN || '',
@@ -26,9 +40,9 @@ const config = {
   googleScriptUrl: process.env.GOOGLE_SCRIPT_URL || '',
   googleScriptSecret: process.env.GOOGLE_SCRIPT_SECRET || 'my_secure_rubber_bot_secret_2026',
 
-  // Server & Webhook (auto-detects Render external URL if available)
+  // Server & Webhook (auto-detects Render external URL or hostname)
   port: parseNumber(process.env.PORT, 3000),
-  webhookDomain: process.env.RENDER_EXTERNAL_URL || process.env.WEBHOOK_DOMAIN || '',
+  webhookDomain: getWebhookDomain(),
 
   // Business Category Definitions
   categories: {
