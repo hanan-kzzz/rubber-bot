@@ -353,6 +353,67 @@ const inlineKeyboards = {
   },
 
   /**
+   * Interactive Customer Directory Keyboard: Each customer name is clickable to view individual payments
+   */
+  customerListWithActions: (customers = []) => {
+    const buttons = [];
+    customers.slice(0, 15).forEach(c => {
+      const dueText = c.balanceDue > 0 ? ` 🔴 ₹${c.balanceDue}` : ' 🟢';
+      const shortName = (c.name || 'Customer').slice(0, 20);
+      buttons.push([
+        Markup.button.callback(`👤 ${shortName}${dueText}`, `cust_tx_${c.id}`)
+      ]);
+    });
+
+    buttons.push([
+      Markup.button.callback('➕ Add New Customer', 'cust_action_add'),
+      Markup.button.callback('💰 Outstanding Dues', 'cust_action_dues')
+    ]);
+    buttons.push([
+      Markup.button.callback('🔄 Toggle Active Status', 'cust_action_toggle'),
+      Markup.button.callback('🏠 Main Menu', 'action_main_menu')
+    ]);
+    return Markup.inlineKeyboard(buttons);
+  },
+
+  /**
+   * Action buttons shown below a customer's individual payments statement
+   */
+  customerStatementActions: (customerId) => {
+    return Markup.inlineKeyboard([
+      [
+        Markup.button.callback('➕ Record Income for Customer', `cust_add_inc_${customerId}`)
+      ],
+      [
+        Markup.button.callback('📋 Back to Customer List', 'cust_action_list'),
+        Markup.button.callback('💰 All Dues', 'cust_action_dues')
+      ],
+      [
+        Markup.button.callback('🏠 Main Menu', 'action_main_menu')
+      ]
+    ]);
+  },
+
+  /**
+   * Customer Dues list keyboard with clickable customer buttons
+   */
+  customerDuesListWithActions: (customersWithDues = []) => {
+    const buttons = [];
+    customersWithDues.slice(0, 15).forEach(c => {
+      const shortName = (c.name || 'Customer').slice(0, 18);
+      buttons.push([
+        Markup.button.callback(`👤 ${shortName} (Due: ₹${c.balanceDue})`, `cust_tx_${c.id}`)
+      ]);
+    });
+
+    buttons.push([
+      Markup.button.callback('📋 View All Customers', 'cust_action_list'),
+      Markup.button.callback('🏠 Main Menu', 'action_main_menu')
+    ]);
+    return Markup.inlineKeyboard(buttons);
+  },
+
+  /**
    * Customer selection inline keyboard for Income flow
    */
   customerSelection: (customers = []) => {

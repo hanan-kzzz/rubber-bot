@@ -78,6 +78,8 @@ const {
   startAddCustomer,
   showCustomerList,
   showCustomerDues,
+  showCustomerStatement,
+  startIncomeForCustomer,
   showToggleCustomerStatusMenu,
   handleToggleCustomerStatusAction,
   handleCustomerTextInput
@@ -189,6 +191,14 @@ bot.command(['delete', 'remove'], async (ctx) => {
 bot.command(['dues', 'balances', 'pending'], async (ctx) => showCustomerDues(ctx));
 bot.command(['employees', 'employee'], async (ctx) => showEmployeeMenu(ctx));
 bot.command(['customers', 'customer'], async (ctx) => showCustomerMenu(ctx));
+bot.command(['statement', 'custpayments'], async (ctx) => {
+  const parts = ctx.message.text.trim().split(/\s+/);
+  if (parts.length > 1) {
+    const custIdOrName = parts.slice(1).join(' ');
+    return showCustomerStatement(ctx, custIdOrName);
+  }
+  return showCustomerList(ctx);
+});
 bot.command(['ai', 'sheet', 'sheets', 'analysis'], async (ctx) => showAiAnalysisMenu(ctx));
 bot.command(['excel', 'download', 'file', 'export'], async (ctx) => handleDownloadExcel(ctx));
 
@@ -489,6 +499,14 @@ bot.on('callback_query', async (ctx) => {
   if (data.startsWith('cust_toggle_')) {
     const custId = data.replace('cust_toggle_', '');
     return handleToggleCustomerStatusAction(ctx, custId);
+  }
+  if (data.startsWith('cust_tx_')) {
+    const target = data.replace('cust_tx_', '');
+    return showCustomerStatement(ctx, target);
+  }
+  if (data.startsWith('cust_add_inc_')) {
+    const custId = data.replace('cust_add_inc_', '');
+    return startIncomeForCustomer(ctx, custId);
   }
 
   // Date Selection Routing (routes to active wizard flow)

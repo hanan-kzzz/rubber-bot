@@ -138,6 +138,77 @@ class SheetsService {
   }
 
   /**
+   * Get transactions and individual payments for a specific customer
+   */
+  async getCustomerTransactions(customerName = null, customerId = null) {
+    const res = await this.request('getCustomerTransactions', { customerName, customerId });
+    if (res && res.success && Array.isArray(res.transactions)) {
+      return res;
+    }
+
+    // Resilient fallback: If Apps Script hasn't been redeployed yet with getCustomerTransactions,
+    // fetch ledger data and extract customer transactions locally
+    try {
+      const allDataRes = await this.getAllData();
+      if (allDataRes && allDataRes.success && allDataRes.sheets && allDataRes.sheets.Transactions) {
+        const txRows = allDataRes.sheets.Transactions;
+        if (txRows.length > 1) {
+          const records = [];
+          let totalBilled = 0;
+          let totalPaid = 0;
+          let balanceDue = 0;
+          const searchName = (customerName || '').toLowerCase().trim();
+
+          for (let i = txRows.length - 1; i >= 1; i--) {
+            const r = txRows[i];
+            const party = String(r[6] || '').toLowerCase().trim();
+            if (searchName && party !== searchName) continue;
+
+            const amt = parseFloat(r[5]) || 0;
+            const status = r[12] ? String(r[12]).trim() : 'Paid';
+            const paid = r[13] !== undefined && r[13] !== '' ? parseFloat(r[13]) : (status.toLowerCase() === 'not paid' ? 0 : amt);
+            const due = r[14] !== undefined && r[14] !== '' ? parseFloat(r[14]) : (status.toLowerCase() === 'not paid' ? amt : (status.toLowerCase() === 'partial paid' ? Math.max(0, amt - paid) : 0));
+            const type = String(r[3] || '').trim();
+
+            if (type.toLowerCase() === 'income') {
+              totalBilled += amt;
+              totalPaid += (isNaN(paid) ? amt : paid);
+              balanceDue += (isNaN(due) ? 0 : due);
+            }
+
+            records.push({
+              id: r[0],
+              date: r[2],
+              type: type,
+              category: r[4],
+              amount: amt,
+              paymentStatus: status,
+              paidAmount: isNaN(paid) ? amt : paid,
+              balanceDue: isNaN(due) ? 0 : due,
+              description: r[9],
+              enteredBy: r[10]
+            });
+          }
+
+          return {
+            success: true,
+            customer: { id: customerId || 'CUST', name: customerName, status: 'Active' },
+            totalBilled: Math.round(totalBilled * 100) / 100,
+            totalPaid: Math.round(totalPaid * 100) / 100,
+            balanceDue: Math.round(balanceDue * 100) / 100,
+            count: records.length,
+            transactions: records
+          };
+        }
+      }
+    } catch (fallbackErr) {
+      logger.warn('Local fallback for customer transactions failed:', fallbackErr.message);
+    }
+
+    return res;
+  }
+
+  /**
    * Add a new customer
    */
   async addCustomer(name, status = 'Active') {

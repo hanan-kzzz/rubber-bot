@@ -112,6 +112,10 @@ function doPost(e) {
         result = handleGetCustomers(requestData.activeOnly);
         break;
 
+      case "getCustomerTransactions":
+        result = handleGetCustomerTransactions(requestData.customerName, requestData.customerId);
+        break;
+
       case "addCustomer":
         result = handleAddCustomer(requestData.data);
         break;
@@ -1136,4 +1140,110 @@ function handleGetCategories() {
   }
 
   return { success: true, income: income, expense: expense };
+}
+
+/**
+ * Get individual transactions and payments for a specific customer
+ */
+function handleGetCustomerTransactions(customerName, customerId) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var custSheet = ss.getSheetByName(SHEET_CUSTOMERS);
+  var txSheet = ss.getSheetByName(SHEET_TRANSACTIONS);
+
+  var targetName = customerName ? String(customerName).trim() : "";
+  var targetId = customerId ? String(customerId).trim() : "";
+  var customerObj = null;
+
+  // Resolve customer by ID or Name from Customers sheet
+  if (custSheet && custSheet.getLastRow() > 1) {
+    var custValues = custSheet.getRange(2, 1, custSheet.getLastRow() - 1, 3).getValues();
+    for (var c = 0; c < custValues.length; c++) {
+      var id = String(custValues[c][0]).trim();
+      var name = String(custValues[c][1]).trim();
+      var status = String(custValues[c][2]).trim();
+
+      if ((targetId && id.toUpperCase() === targetId.toUpperCase()) ||
+          (targetName && name.toLowerCase() === targetName.toLowerCase())) {
+        customerObj = { id: id, name: name, status: status || "Active" };
+        targetName = name;
+        targetId = id;
+        break;
+      }
+    }
+  }
+
+  if (!customerObj) {
+    if (targetName) {
+      customerObj = { id: targetId || "CUST-000", name: targetName, status: "Active" };
+    } else {
+      return { success: false, error: "Customer not found" };
+    }
+  }
+
+  var records = [];
+  var totalBilled = 0;
+  var totalPaid = 0;
+  var balanceDue = 0;
+
+  if (txSheet && txSheet.getLastRow() > 1) {
+    var maxCols = Math.max(12, txSheet.getLastColumn());
+    var txData = txSheet.getRange(2, 1, txSheet.getLastRow() - 1, maxCols).getValues();
+
+    for (var i = txData.length - 1; i >= 0; i--) { // Reverse order: newest first
+      var row = txData[i];
+      var txType = String(row[3]).trim();
+      var partyName = String(row[6]).trim(); // SourceOrPurpose
+
+      // Match customer name (case-insensitive)
+      if (partyName.toLowerCase() !== targetName.toLowerCase()) {
+        continue;
+      }
+
+      var txDateVal = row[2];
+      var formattedTxDate = (txDateVal instanceof Date)
+        ? Utilities.formatDate(txDateVal, "Asia/Kolkata", "yyyy-MM-dd")
+        : String(txDateVal).trim();
+
+      var amt = parseFloat(row[5]) || 0;
+      var status = row.length >= 13 && row[12] ? String(row[12]).trim() : "Paid";
+      var paidAmt = (row.length >= 14 && row[13] !== "" && row[13] !== undefined)
+        ? parseFloat(row[13])
+        : (status.toLowerCase() === "not paid" ? 0 : amt);
+      var balAmt = (row.length >= 15 && row[14] !== "" && row[14] !== undefined)
+        ? parseFloat(row[14])
+        : (status.toLowerCase() === "not paid" ? amt : (status.toLowerCase() === "partial paid" ? Math.max(0, amt - paidAmt) : 0));
+
+      if (isNaN(paidAmt)) paidAmt = amt;
+      if (isNaN(balAmt)) balAmt = 0;
+
+      if (txType.toLowerCase() === "income") {
+        totalBilled += amt;
+        totalPaid += paidAmt;
+        balanceDue += balAmt;
+      }
+
+      records.push({
+        id: row[0],
+        date: formattedTxDate,
+        type: txType,
+        category: row[4],
+        amount: amt,
+        paymentStatus: status,
+        paidAmount: paidAmt,
+        balanceDue: balAmt,
+        description: row[9],
+        enteredBy: row[10]
+      });
+    }
+  }
+
+  return {
+    success: true,
+    customer: customerObj,
+    totalBilled: Math.round(totalBilled * 100) / 100,
+    totalPaid: Math.round(totalPaid * 100) / 100,
+    balanceDue: Math.round(balanceDue * 100) / 100,
+    count: records.length,
+    transactions: records
+  };
 }

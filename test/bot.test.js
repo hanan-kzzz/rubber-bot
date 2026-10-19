@@ -163,6 +163,109 @@ describe('Customer Keyboards & Services', () => {
     assert.strictEqual(typeof sheetsService.getCustomers, 'function');
     assert.strictEqual(typeof sheetsService.addCustomer, 'function');
     assert.strictEqual(typeof sheetsService.toggleCustomerStatus, 'function');
+    assert.strictEqual(typeof sheetsService.getCustomerTransactions, 'function');
+  });
+
+  test('customerListWithActions keyboard builds cust_tx_ buttons for individual statement viewing', () => {
+    const mockCustomers = [
+      { id: 'CUST-001', name: 'Kottayam Rubber', balanceDue: 45000 },
+      { id: 'CUST-002', name: 'Apex Latex', balanceDue: 0 }
+    ];
+
+    const kb = inlineKeyboards.customerListWithActions(mockCustomers);
+    const buttonsFlat = kb.reply_markup.inline_keyboard.flat();
+
+    // Verify all buttons stay strictly within 64 bytes callback limit
+    buttonsFlat.forEach(btn => {
+      assert.ok(
+        Buffer.byteLength(btn.callback_data, 'utf8') <= 64,
+        `Callback data "${btn.callback_data}" exceeds 64-byte Telegram limit!`
+      );
+    });
+
+    const c1Btn = buttonsFlat.find(b => b.callback_data === 'cust_tx_CUST-001');
+    assert.ok(c1Btn, 'Must render cust_tx_ callback button for CUST-001');
+    assert.match(c1Btn.text, /Kottayam Rubber/);
+    assert.match(c1Btn.text, /45000/);
+
+    const c2Btn = buttonsFlat.find(b => b.callback_data === 'cust_tx_CUST-002');
+    assert.ok(c2Btn, 'Must render cust_tx_ callback button for CUST-002');
+  });
+
+  test('customerStatementActions keyboard renders income shortcut and navigation under 64 bytes', () => {
+    const kb = inlineKeyboards.customerStatementActions('CUST-001');
+    const buttonsFlat = kb.reply_markup.inline_keyboard.flat();
+
+    buttonsFlat.forEach(btn => {
+      assert.ok(
+        Buffer.byteLength(btn.callback_data, 'utf8') <= 64,
+        `Callback data "${btn.callback_data}" exceeds 64-byte Telegram limit!`
+      );
+    });
+
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'cust_add_inc_CUST-001'));
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'cust_action_list'));
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'cust_action_dues'));
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'action_main_menu'));
+  });
+
+  test('customerDuesListWithActions keyboard builds cust_tx_ buttons for customers with dues', () => {
+    const mockDues = [
+      { id: 'CUST-001', name: 'George Thomas', balanceDue: 25000 }
+    ];
+
+    const kb = inlineKeyboards.customerDuesListWithActions(mockDues);
+    const buttonsFlat = kb.reply_markup.inline_keyboard.flat();
+
+    buttonsFlat.forEach(btn => {
+      assert.ok(
+        Buffer.byteLength(btn.callback_data, 'utf8') <= 64,
+        `Callback data "${btn.callback_data}" exceeds 64-byte Telegram limit!`
+      );
+    });
+
+    const dueBtn = buttonsFlat.find(b => b.callback_data === 'cust_tx_CUST-001');
+    assert.ok(dueBtn, 'Must render cust_tx_ callback button for customer with due');
+    assert.match(dueBtn.text, /George Thomas/);
+    assert.match(dueBtn.text, /25000/);
+  });
+
+  test('sheetsService getCustomerTransactions calculates balance correctly with fallback', async () => {
+    const originalGetAllData = sheetsService.getAllData;
+    const originalRequest = sheetsService.request;
+
+    // Simulate Apps Script endpoint not updated yet, falling back to getAllData
+    sheetsService.request = async (action) => {
+      if (action === 'getCustomerTransactions') {
+        return { success: false, error: 'Unknown action' };
+      }
+      return { success: true };
+    };
+
+    sheetsService.getAllData = async () => ({
+      success: true,
+      sheets: {
+        Transactions: [
+          ['Transaction ID', 'Timestamp', 'Date', 'Type', 'Category', 'Amount (₹)', 'Party', 'Staff', 'Route', 'Note', 'EnteredBy', 'Meta', 'Payment Status', 'Paid Amount', 'Balance Due'],
+          ['TXN-INC-1', '2026-10-18T10:00:00Z', '2026-10-18', 'Income', 'Rubber Sales', 50000, 'Kottayam Rubber', '', '', 'Lot 1', 'Owner', '', 'Paid', 50000, 0],
+          ['TXN-INC-2', '2026-10-19T11:00:00Z', '2026-10-19', 'Income', 'Rubber Sales', 30000, 'Kottayam Rubber', '', '', 'Lot 2', 'Owner', '', 'Partial Paid', 10000, 20000],
+          ['TXN-INC-3', '2026-10-19T12:00:00Z', '2026-10-19', 'Income', 'Rubber Sales', 25000, 'Other Party', '', '', 'Lot 3', 'Owner', '', 'Paid', 25000, 0]
+        ]
+      }
+    });
+
+    try {
+      const res = await sheetsService.getCustomerTransactions('Kottayam Rubber', 'CUST-001');
+      assert.strictEqual(res.success, true);
+      assert.strictEqual(res.totalBilled, 80000);
+      assert.strictEqual(res.totalPaid, 60000);
+      assert.strictEqual(res.balanceDue, 20000);
+      assert.strictEqual(res.transactions.length, 2);
+      assert.strictEqual(res.transactions[0].id, 'TXN-INC-2'); // newest first
+    } finally {
+      sheetsService.getAllData = originalGetAllData;
+      sheetsService.request = originalRequest;
+    }
   });
 });
 
