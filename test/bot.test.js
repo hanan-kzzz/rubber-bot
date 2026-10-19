@@ -478,3 +478,58 @@ describe('Transaction Deletion Feature', () => {
   });
 });
 
+describe('Persistent Bottom Reply Keyboards', () => {
+  const replyKeyboards = require('../src/keyboards/replyKeyboards');
+
+  test('mainMenu produces valid persistent ReplyKeyboardMarkup with resize and placeholder', () => {
+    const ownerKb = replyKeyboards.mainMenu(true);
+    assert.ok(ownerKb.reply_markup, 'Must have reply_markup');
+    assert.strictEqual(ownerKb.reply_markup.resize_keyboard, true);
+    assert.strictEqual(ownerKb.reply_markup.is_persistent, true);
+    assert.ok(ownerKb.reply_markup.input_field_placeholder);
+
+    const rows = ownerKb.reply_markup.keyboard;
+    assert.strictEqual(rows.length, 5, 'Owner menu should have 5 rows');
+
+    // Row 1: 2 buttons (Add Income, Add Expense)
+    assert.strictEqual(rows[0].length, 2);
+    assert.ok(rows[0].includes('➕ Add Income'));
+    assert.ok(rows[0].includes('➖ Add Expense'));
+
+    // Row 2: 3 buttons (Staff Wages, Travel Expenses, Goods Summary)
+    assert.strictEqual(rows[1].length, 3);
+    assert.ok(rows[1].includes('👷 Staff Wages'));
+    assert.ok(rows[1].includes('🚗 Travel Expenses'));
+    assert.ok(rows[1].includes('📦 Goods Summary'));
+
+    // Row 3: 3 buttons (Daily Report, Monthly Report, Recent Records)
+    assert.strictEqual(rows[2].length, 3);
+    assert.ok(rows[2].includes('📊 Daily Report'));
+    assert.ok(rows[2].includes('📅 Monthly Report'));
+    assert.ok(rows[2].includes('📄 Recent Records'));
+
+    // Row 4: 3 buttons (Excel & AI Prompts, Executive Hub, Customers)
+    assert.strictEqual(rows[3].length, 3);
+    assert.ok(rows[3].includes('📥 Excel & AI Prompts'));
+    assert.ok(rows[3].includes('👑 Executive Hub'));
+    assert.ok(rows[3].includes('👥 Customers'));
+
+    // Row 5: Owner row (Employees, Help, Cancel / Reset)
+    assert.strictEqual(rows[4].length, 3);
+    assert.ok(rows[4].includes('👷 Employees'));
+    assert.ok(rows[4].includes('❓ Help'));
+    assert.ok(rows[4].includes('❌ Cancel / Reset'));
+  });
+
+  test('mainMenu for staff excludes owner-restricted employee buttons', () => {
+    const staffKb = replyKeyboards.mainMenu(false);
+    const rows = staffKb.reply_markup.keyboard;
+    const flatButtons = rows.flat();
+
+    assert.ok(!flatButtons.includes('👷 Employees'), 'Staff should not see Employees button');
+    assert.ok(flatButtons.includes('➕ Add Income'));
+    assert.ok(flatButtons.includes('➖ Add Expense'));
+    assert.ok(flatButtons.includes('❌ Cancel / Reset'));
+  });
+});
+

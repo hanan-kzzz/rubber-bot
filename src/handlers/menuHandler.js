@@ -1,4 +1,5 @@
 const inlineKeyboards = require('../keyboards/inlineKeyboards');
+const replyKeyboards = require('../keyboards/replyKeyboards');
 const sessionStore = require('../services/sessionStore');
 const { isOwner } = require('../middleware/auth');
 const logger = require('../utils/logger');
@@ -17,16 +18,17 @@ async function showMainMenu(ctx, isEdit = false) {
     `🌳 <b>Rubber Business Accounting Tracker</b>\n` +
     `━━━━━━━━━━━━━━━━━━━━━\n` +
     `Hello <b>${name}</b>! Welcome to your accounting bot.\n\n` +
-    `Tap any button below to record daily transactions, view financial reports, or launch the interactive dashboard:\n` +
-    `• <b>👑 Executive Dashboard:</b> Interactive KPIs, charts & visual Web App\n` +
+    `Tap any pinned button below to record daily transactions, view financial reports, or launch the interactive dashboard:\n` +
+    `• <b>👑 Executive Hub:</b> Interactive KPIs, charts & visual Web App\n` +
     `• <b>Income / Expense:</b> Record rubber sales & daily expenses\n` +
     `• <b>Staff Wages:</b> Record actual daily wages paid\n` +
     `• <b>Goods Transactions:</b> Track goods income vs purchases\n` +
     `• <b>Reports:</b> Instant Daily, Monthly & Custom cashflow\n` +
-    `• <b>AI Analysis:</b> Direct Google Sheet link & ready-to-use AI prompts\n\n` +
+    `• <b>AI Analysis:</b> Full Excel download & ready-to-use AI prompts\n\n` +
     `<i>All entries are saved securely in your Google Sheet ledger.</i>`;
 
   const keyboard = inlineKeyboards.mainMenu(owner);
+  const persistentKb = replyKeyboards.mainMenu(owner);
 
   if (isEdit && ctx.callbackQuery) {
     try {
@@ -40,7 +42,7 @@ async function showMainMenu(ctx, isEdit = false) {
     }
   }
 
-  return ctx.replyWithHTML(welcomeText, keyboard);
+  return ctx.replyWithHTML(welcomeText, persistentKb);
 }
 
 /**

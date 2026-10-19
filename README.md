@@ -37,10 +37,20 @@ A complete, production-ready Telegram accounting tracker designed specifically f
     - Interactive Ledger table with instant live search and category/type filter chips (`All`, `Income`, `Expenses`, `Wages`).
     - Seamless **Telegram Mini App (WebApp)** integration with haptic feedback and responsive mobile/desktop viewports.
     - Instant Live Google Sheets Sync with automatic fallback to rich sample demo preview data.
-- **Clickable Inline Keyboard Interface:** No need to memorize commands or type category numbers.
-- **Categorized Income Management:**
+- **24/7 Persistent Docked Bottom Keyboard (ReplyKeyboardMarkup):**
+  - Pinned right below the message input box 24/7 on Telegram Desktop and Mobile — no scrolling back up or typing `/start`.
+  - Balanced multi-row layout: Primary Actions (`➕ Add Income`, `➖ Add Expense`), Operations (`👷 Staff Wages`, `🚗 Travel Expenses`, `📦 Goods Summary`), Reports (`📊 Daily Report`, `📅 Monthly Report`, `📄 Recent Records`), and Hubs (`📥 Excel & AI Prompts`, `👑 Executive Hub`, `👥 Customers`, `👷 Employees`, `❌ Cancel / Reset`).
+  - Seamless instant-switch triggers: tapping any button immediately launches that flow or resets any active entry.
+- **Clickable Inline Keyboard Interface:** Dynamic in-chat menus for date pickers, customer select, categories, and payment statuses.
+- **Categorized Income Management with Payment Status:**
   - Rubber Sales, Goods Income, Customer Payments, Other Income.
+  - **Payment Status Tracking:** Mark each income transaction as `✅ Fully Paid`, `⏳ Not Paid (Unpaid / Parcel Due)`, or `📦 Partial / Parcel Paid`.
+  - For partial payments, enter the amount received now; the remaining balance is automatically calculated and tracked as customer due.
   - Indian Rupee (`₹`) input validation, customer name, date selection, optional description, review card.
+- **Transaction Deletion / Removal (`/delete` & In-Bot Interface):**
+  - Delete mistaken transaction records (Income, Expense, Wages, Goods, Travel) directly from Telegram.
+  - Accessible via `/delete [TX_ID]`, `/recent`, or the `🗑️ Delete / Remove an Entry` button with safety confirmation dialog.
+  - Permanently deletes the corresponding row in your Google Sheets ledger.
 - **Categorized Expense Management:**
   - Goods Purchases (Rubber-related goods, Raw materials, Supplies, Other goods).
   - Refreshments (Tea powder, Sugar, Coffee powder, Food).
@@ -60,10 +70,11 @@ A complete, production-ready Telegram accounting tracker designed specifically f
   - **Monthly Report:** Comprehensive figures for current month.
   - **Custom Date Report:** Select any start and end date (`YYYY-MM-DD`).
   - Clear **Net Cashflow** definition (`Total Income − Total Expenses`).
-- **Dedicated Customer Directory & Auto-Storage:**
+- **Dedicated Customer Directory, Balances & Dues Tracking:**
   - Registered customers and buyers appear as quick one-tap buttons when entering income.
   - Any new customer name entered during income recording is automatically saved to the `Customers` sheet.
-  - Admin-only menu to view customer directory, add new customers, and toggle Active/Inactive status.
+  - **Outstanding Balances & Dues Hub (`/dues`):** View all customers with unpaid balances or parcel dues, with total pending receivables across your business.
+  - Admin-only menu to view customer directory, check individual customer billing vs received totals, add new customers, and toggle Active/Inactive status.
 - **Owner-Controlled Employee Management:**
   - Admin-only buttons to add workers, view directory, toggle Active/Inactive status, and view recorded wage breakdowns.
 - **Strict Role-Based Security:**

@@ -5,9 +5,10 @@ const { Telegraf } = require('telegraf');
 const express = require('express');
 const config = require('./config/config');
 const logger = require('./utils/logger');
-const { authMiddleware } = require('./middleware/auth');
+const { authMiddleware, isOwner } = require('./middleware/auth');
 const sessionStore = require('./services/sessionStore');
 const inlineKeyboards = require('./keyboards/inlineKeyboards');
+const replyKeyboards = require('./keyboards/replyKeyboards');
 const { formatTransactionSummary } = require('./utils/formatter');
 
 // Import Handlers
@@ -523,13 +524,90 @@ bot.on('callback_query', async (ctx) => {
 // ==========================================
 bot.on('text', async (ctx) => {
   const userId = ctx.from?.id;
+  const rawText = (ctx.message?.text || '').trim();
+  const owner = isOwner(userId);
+
+  // 1. Intercept persistent Reply Keyboard buttons (always take priority over flows)
+  if (rawText === '➕ Add Income' || /^add income$/i.test(rawText)) {
+    sessionStore.clear(userId);
+    return startIncomeFlow(ctx);
+  }
+
+  if (rawText === '➖ Add Expense' || /^add expense$/i.test(rawText)) {
+    sessionStore.clear(userId);
+    return startExpenseMenu(ctx);
+  }
+
+  if (rawText === '👷 Staff Wages' || /^staff wages$/i.test(rawText)) {
+    sessionStore.clear(userId);
+    return startWagesFlow(ctx);
+  }
+
+  if (rawText === '🚗 Travel Expenses' || /^travel( expenses)?$/i.test(rawText)) {
+    sessionStore.clear(userId);
+    return startTravelFlow(ctx);
+  }
+
+  if (rawText === '📦 Goods Summary' || /^goods( summary)?$/i.test(rawText)) {
+    sessionStore.clear(userId);
+    return showGoodsSummary(ctx, 'month');
+  }
+
+  if (rawText === '📊 Daily Report' || /^daily report$/i.test(rawText)) {
+    sessionStore.clear(userId);
+    return handleDailyReport(ctx);
+  }
+
+  if (rawText === '📅 Monthly Report' || /^monthly report$/i.test(rawText)) {
+    sessionStore.clear(userId);
+    return handleMonthlyReport(ctx);
+  }
+
+  if (rawText === '📄 Recent Records' || /^recent( records)?$/i.test(rawText)) {
+    sessionStore.clear(userId);
+    return showRecentTransactions(ctx);
+  }
+
+  if (rawText === '📥 Excel & AI Prompts' || /^(excel|ai analysis)/i.test(rawText)) {
+    sessionStore.clear(userId);
+    return showAiAnalysisMenu(ctx);
+  }
+
+  if (rawText === '👑 Executive Hub' || rawText === '👑 Dashboard' || /^executive hub$/i.test(rawText)) {
+    sessionStore.clear(userId);
+    return showDashboard(ctx);
+  }
+
+  if (rawText === '👥 Customers' || /^customers$/i.test(rawText)) {
+    sessionStore.clear(userId);
+    return showCustomerMenu(ctx);
+  }
+
+  if (rawText === '👷 Employees' || /^employees$/i.test(rawText)) {
+    sessionStore.clear(userId);
+    return showEmployeeMenu(ctx);
+  }
+
+  if (rawText === '❓ Help' || /^help$/i.test(rawText)) {
+    return showHelp(ctx);
+  }
+
+  if (rawText === '❌ Cancel / Reset' || rawText === '❌ Cancel' || /^cancel$/i.test(rawText) || /^reset$/i.test(rawText)) {
+    sessionStore.clear(userId);
+    await ctx.reply(
+      '🔄 Operation cancelled. Returning to main menu.',
+      replyKeyboards.mainMenu(owner)
+    );
+    return showMainMenu(ctx, false);
+  }
+
   const session = sessionStore.get(userId);
 
   if (!session) {
-    // No active flow: guide user to main menu
+    // No active flow: guide user to docked buttons and show main menu
     return ctx.replyWithHTML(
-      `👋 Please use the clickable buttons below to record transactions or generate reports:`,
-      inlineKeyboards.mainMenu(ctx.state?.isOwner)
+      `👋 Please tap any of the pinned buttons below to record transactions, view reports, or export data:`,
+      replyKeyboards.mainMenu(owner)
     );
   }
 
