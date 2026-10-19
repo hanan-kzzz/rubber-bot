@@ -614,6 +614,14 @@ app.get('/', (req, res) => {
   });
 });
 
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'UP',
+    service: 'Rubber Business Telegram Bot',
+    timestamp: new Date().toISOString()
+  });
+});
+
 async function startServer() {
   const port = config.port;
   const webhookDomain = config.webhookDomain;
