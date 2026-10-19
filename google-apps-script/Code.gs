@@ -116,6 +116,10 @@ function doPost(e) {
         result = handleToggleCustomerStatus(requestData.customerId);
         break;
 
+      case "getSheetInfo":
+        result = handleGetSheetInfo();
+        break;
+
       default:
         return createJsonResponse({ success: false, error: "Unknown action: " + action }, 400);
     }
@@ -328,6 +332,8 @@ function initSheets() {
   return {
     success: true,
     message: "Sheets verified and initialized successfully",
+    spreadsheetUrl: ss.getUrl(),
+    spreadsheetName: ss.getName(),
     sheets: [SHEET_TRANSACTIONS, SHEET_EMPLOYEES, SHEET_CUSTOMERS, SHEET_CATEGORIES]
   };
 }
@@ -808,6 +814,19 @@ function handleToggleCustomerStatus(customerId) {
   }
 
   return { success: false, error: "Customer with ID " + customerId + " not found" };
+}
+
+/**
+ * Returns spreadsheet metadata and web URL
+ */
+function handleGetSheetInfo() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  return {
+    success: true,
+    spreadsheetId: ss.getId(),
+    spreadsheetName: ss.getName(),
+    spreadsheetUrl: ss.getUrl()
+  };
 }
 
 /**

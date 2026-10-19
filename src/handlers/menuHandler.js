@@ -21,7 +21,8 @@ async function showMainMenu(ctx, isEdit = false) {
     `• <b>Income / Expense:</b> Record rubber sales & daily expenses\n` +
     `• <b>Staff Wages:</b> Record actual daily wages paid\n` +
     `• <b>Goods Transactions:</b> Track goods income vs purchases\n` +
-    `• <b>Reports:</b> Instant Daily, Monthly & Custom cashflow\n\n` +
+    `• <b>Reports:</b> Instant Daily, Monthly & Custom cashflow\n` +
+    `• <b>AI Analysis:</b> Direct Google Sheet link & ready-to-use AI prompts\n\n` +
     `<i>All entries are saved securely in your Google Sheet ledger.</i>`;
 
   const keyboard = inlineKeyboards.mainMenu(owner);
@@ -66,6 +67,8 @@ async function showHelp(ctx) {
     `Shows the latest 10 transactions recorded in your Google Sheet.\n\n` +
     `<b>8. 🤝 Customer Directory (Admin):</b>\n` +
     `Manage registered rubber buyers and customers. New customer names entered during Income recording are automatically added here for quick one-tap access.\n\n` +
+    `<b>9. 🤖 AI Sheet Analysis & Prompts:</b>\n` +
+    `Direct link to your Google Spreadsheet with ready-to-copy AI prompts to analyze profitability, customer concentration, labor wage variances, and cost leakages in ChatGPT, Gemini, or Claude.\n\n` +
     `💡 <i>Tip: You can press ❌ Cancel anytime to abort an in-progress entry.</i>`;
 
   return ctx.replyWithHTML(helpText, inlineKeyboards.returnToMainMenu());

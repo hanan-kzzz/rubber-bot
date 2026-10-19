@@ -27,6 +27,9 @@ const inlineKeyboards = {
       [
         Markup.button.callback('📋 Custom Date Report', 'report_custom'),
         Markup.button.callback('❓ Help', 'menu_help')
+      ],
+      [
+        Markup.button.callback('🤖 AI Analysis & Sheet Link', 'menu_ai_analysis')
       ]
     ];
 
@@ -208,6 +211,18 @@ const inlineKeyboards = {
   },
 
   /**
+   * Action buttons shown after viewing a report
+   */
+  reportActions: () => {
+    return Markup.inlineKeyboard([
+      [
+        Markup.button.callback('🤖 AI Sheet Analysis', 'menu_ai_analysis'),
+        Markup.button.callback('🏠 Main Menu', 'action_main_menu')
+      ]
+    ]);
+  },
+
+  /**
    * Goods Transactions Hub keyboard
    */
   goodsHub: () => {
@@ -313,6 +328,62 @@ const inlineKeyboards = {
     return Markup.inlineKeyboard([
       [Markup.button.callback('❌ Cancel', 'action_cancel')]
     ]);
+  },
+
+  /**
+   * AI Analysis and Google Sheet Hub keyboard
+   */
+  aiAnalysisMenu: (sheetUrl) => {
+    const buttons = [];
+    if (sheetUrl && sheetUrl.startsWith('http')) {
+      buttons.push([Markup.button.url('📊 Open Google Sheet ↗️', sheetUrl)]);
+    }
+    buttons.push([
+      Markup.button.callback('📊 1. Full Business & Profit Audit', 'ai_prompt_profit')
+    ]);
+    buttons.push([
+      Markup.button.callback('👥 2. Customer & Sales Report', 'ai_prompt_customer'),
+      Markup.button.callback('👷 3. Wages & Labor Analysis', 'ai_prompt_wages')
+    ]);
+    buttons.push([
+      Markup.button.callback('📦 4. Goods Trade Margins', 'ai_prompt_goods'),
+      Markup.button.callback('✂️ 5. Expense Optimization', 'ai_prompt_expenses')
+    ]);
+    buttons.push([
+      Markup.button.callback('🏠 Back to Main Menu', 'action_main_menu')
+    ]);
+    return Markup.inlineKeyboard(buttons);
+  },
+
+  /**
+   * Individual AI prompt detail keyboard
+   */
+  aiPromptDetail: (sheetUrl, currentKey) => {
+    const buttons = [];
+    if (sheetUrl && sheetUrl.startsWith('http')) {
+      buttons.push([Markup.button.url('📊 Open Google Sheet ↗️', sheetUrl)]);
+    }
+    const prompts = [
+      { key: 'ai_prompt_profit', label: '📊 Profit Audit' },
+      { key: 'ai_prompt_customer', label: '👥 Customers' },
+      { key: 'ai_prompt_wages', label: '👷 Wages' },
+      { key: 'ai_prompt_goods', label: '📦 Goods Margins' },
+      { key: 'ai_prompt_expenses', label: '✂️ Expenses' }
+    ].filter(p => p.key !== currentKey);
+
+    for (let i = 0; i < prompts.length; i += 2) {
+      const row = [Markup.button.callback(prompts[i].label, prompts[i].key)];
+      if (prompts[i + 1]) {
+        row.push(Markup.button.callback(prompts[i + 1].label, prompts[i + 1].key));
+      }
+      buttons.push(row);
+    }
+
+    buttons.push([
+      Markup.button.callback('⬅️ All AI Prompts', 'menu_ai_analysis'),
+      Markup.button.callback('🏠 Main Menu', 'action_main_menu')
+    ]);
+    return Markup.inlineKeyboard(buttons);
   }
 };
 

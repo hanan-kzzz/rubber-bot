@@ -57,6 +57,10 @@ A complete, production-ready Telegram accounting tracker designed specifically f
   - Telegram numeric IDs only (usernames are not used for authentication).
   - Owner gets admin privileges; authorized staff can record transactions and view reports.
   - Unrecognized users are locked out and informed of their numeric ID.
+- **AI Model Analysis & Direct Google Sheet Link:**
+  - One-tap button to open Google Spreadsheet directly on mobile or web.
+  - Ready-to-use expert AI prompts formatted with one-tap copy for ChatGPT, Gemini, or Claude.
+  - Prompts include: Full Financial & Profit Audit, Customer Sales & Concentration, Staff Daily Wages & Labor Variance, Goods Merchandise Margins, and Expense Optimization & Cost Leakage.
 - **Auto-Initializing Google Sheets Ledger:**
   - Automatically creates and formats `Transactions`, `Employees`, `Customers`, and `Categories` sheets with freeze rows, color headers, and INR formatting.
 

@@ -57,7 +57,7 @@ async function showRecentTransactions(ctx) {
 
     text += `━━━━━━━━━━━━━━━━━━━━━\n<i>Stored permanently in Google Sheets ledger.</i>`;
 
-    return ctx.replyWithHTML(text, inlineKeyboards.returnToMainMenu());
+    return ctx.replyWithHTML(text, inlineKeyboards.reportActions());
   } catch (err) {
     logger.error('Error fetching recent transactions:', err);
     return ctx.replyWithHTML(`❌ Error: ${escapeHtml(err.message)}`, inlineKeyboards.returnToMainMenu());

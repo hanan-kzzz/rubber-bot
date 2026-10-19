@@ -165,3 +165,52 @@ describe('Customer Keyboards & Services', () => {
     assert.strictEqual(typeof sheetsService.toggleCustomerStatus, 'function');
   });
 });
+
+describe('AI Analysis & Google Sheet Hub', () => {
+  const inlineKeyboards = require('../src/keyboards/inlineKeyboards');
+  const sheetsService = require('../src/services/sheetsService');
+  const { AI_PROMPTS } = require('../src/handlers/aiAnalysisHandler');
+
+  test('mainMenu includes AI Analysis button', () => {
+    const menu = inlineKeyboards.mainMenu(false);
+    const buttonsFlat = menu.reply_markup.inline_keyboard.flat();
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'menu_ai_analysis'));
+  });
+
+  test('aiAnalysisMenu includes open sheet url button and prompts', () => {
+    const testUrl = 'https://docs.google.com/spreadsheets/d/test1234/edit';
+    const menu = inlineKeyboards.aiAnalysisMenu(testUrl);
+    const buttonsFlat = menu.reply_markup.inline_keyboard.flat();
+
+    const urlBtn = buttonsFlat.find(b => b.url === testUrl);
+    assert.ok(urlBtn, 'Should have url button for Google Sheet');
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'ai_prompt_profit'));
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'ai_prompt_customer'));
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'ai_prompt_wages'));
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'ai_prompt_goods'));
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'ai_prompt_expenses'));
+  });
+
+  test('AI_PROMPTS generate valid prompts containing sheet link', () => {
+    const testUrl = 'https://docs.google.com/spreadsheets/d/test1234/edit';
+    const promptKeys = Object.keys(AI_PROMPTS);
+
+    assert.strictEqual(promptKeys.length, 5);
+
+    promptKeys.forEach(key => {
+      const p = AI_PROMPTS[key];
+      assert.ok(p.title);
+      assert.ok(p.desc);
+      assert.strictEqual(typeof p.prompt, 'function');
+
+      const text = p.prompt(testUrl);
+      assert.ok(text.includes(testUrl), `Prompt ${key} should include the spreadsheet URL`);
+      assert.ok(text.length > 50, `Prompt ${key} should be descriptive`);
+    });
+  });
+
+  test('sheetsService getSpreadsheetUrl returns valid google docs link', () => {
+    const url = sheetsService.getSpreadsheetUrl();
+    assert.ok(url.startsWith('https://docs.google.com/spreadsheets/'));
+  });
+});

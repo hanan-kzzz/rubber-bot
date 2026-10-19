@@ -22,7 +22,7 @@ async function handleDailyReport(ctx) {
     const report = await sheetsService.getReport(today, today);
     const htmlText = formatReportSummary(report, `Daily Financial Report (${today})`);
 
-    return ctx.replyWithHTML(htmlText, inlineKeyboards.returnToMainMenu());
+    return ctx.replyWithHTML(htmlText, inlineKeyboards.reportActions());
   } catch (err) {
     logger.error('Error generating daily report:', err);
     return ctx.replyWithHTML(`❌ <b>Failed to load daily report:</b>\n${escapeHtml(err.message)}`, inlineKeyboards.returnToMainMenu());
@@ -47,7 +47,7 @@ async function handleMonthlyReport(ctx) {
     const report = await sheetsService.getReport(startDate, endDate);
     const htmlText = formatReportSummary(report, `Monthly Financial Report - ${monthName}`);
 
-    return ctx.replyWithHTML(htmlText, inlineKeyboards.returnToMainMenu());
+    return ctx.replyWithHTML(htmlText, inlineKeyboards.reportActions());
   } catch (err) {
     logger.error('Error generating monthly report:', err);
     return ctx.replyWithHTML(`❌ <b>Failed to load monthly report:</b>\n${escapeHtml(err.message)}`, inlineKeyboards.returnToMainMenu());
@@ -142,7 +142,7 @@ async function handleCustomReportTextInput(ctx) {
       const report = await sheetsService.getReport(startDate, endDate);
       const htmlText = formatReportSummary(report, `Custom Period Report (${startDate} to ${endDate})`);
 
-      return ctx.replyWithHTML(htmlText, inlineKeyboards.returnToMainMenu());
+      return ctx.replyWithHTML(htmlText, inlineKeyboards.reportActions());
     } catch (err) {
       logger.error('Error generating custom report:', err);
       return ctx.replyWithHTML(`❌ <b>Failed to load report:</b>\n${escapeHtml(err.message)}`, inlineKeyboards.returnToMainMenu());

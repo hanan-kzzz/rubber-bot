@@ -150,6 +150,24 @@ class SheetsService {
   async getCategories() {
     return this.request('getCategories');
   }
+
+  /**
+   * Get spreadsheet metadata and web URL
+   */
+  async getSheetInfo() {
+    const res = await this.request('getSheetInfo');
+    if (res && res.success && res.spreadsheetUrl) {
+      this.cachedSpreadsheetUrl = res.spreadsheetUrl;
+    }
+    return res;
+  }
+
+  /**
+   * Returns Google Spreadsheet URL (from config, cache, or fallback)
+   */
+  getSpreadsheetUrl() {
+    return config.googleSheetUrl || this.cachedSpreadsheetUrl || 'https://docs.google.com/spreadsheets/d/1qRVPKZ5W_Y6_VLQxLLL2FRrjijWIRdkQbl0TOA_y6xc/edit';
+  }
 }
 
 const sheetsService = new SheetsService();

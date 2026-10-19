@@ -81,6 +81,7 @@ const {
 } = require('./handlers/customerHandler');
 
 const { showRecentTransactions } = require('./handlers/recentHandler');
+const { showAiAnalysisMenu, showAiPromptDetail } = require('./handlers/aiAnalysisHandler');
 
 // Validate minimum required setup
 if (!config.botToken) {
@@ -154,6 +155,7 @@ bot.command('goods', async (ctx) => showGoodsSummary(ctx, 'month'));
 bot.command('recent', async (ctx) => showRecentTransactions(ctx));
 bot.command(['employees', 'employee'], async (ctx) => showEmployeeMenu(ctx));
 bot.command(['customers', 'customer'], async (ctx) => showCustomerMenu(ctx));
+bot.command(['ai', 'sheet', 'sheets', 'analysis'], async (ctx) => showAiAnalysisMenu(ctx));
 
 // ==========================================
 // 2. CALLBACK QUERY ROUTING
@@ -345,6 +347,8 @@ bot.on('callback_query', async (ctx) => {
   if (data === 'menu_help') return showHelp(ctx);
   if (data === 'menu_employees') return showEmployeeMenu(ctx);
   if (data === 'menu_customers') return showCustomerMenu(ctx);
+  if (data === 'menu_ai_analysis') return showAiAnalysisMenu(ctx);
+  if (data.startsWith('ai_prompt_')) return showAiPromptDetail(ctx, data);
 
   // Income Category and Customer Selection
   if (data.startsWith('inc_cat_')) {

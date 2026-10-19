@@ -40,6 +40,9 @@ const config = {
   googleScriptUrl: process.env.GOOGLE_SCRIPT_URL || '',
   googleScriptSecret: process.env.GOOGLE_SCRIPT_SECRET || 'my_secure_rubber_bot_secret_2026',
 
+  // Google Spreadsheet direct link for viewing & AI analysis
+  googleSheetUrl: process.env.GOOGLE_SHEET_URL || 'https://docs.google.com/spreadsheets/d/1qRVPKZ5W_Y6_VLQxLLL2FRrjijWIRdkQbl0TOA_y6xc/edit',
+
   // Server & Webhook (auto-detects Render external URL or hostname)
   port: parseNumber(process.env.PORT, 3000),
   webhookDomain: getWebhookDomain(),
