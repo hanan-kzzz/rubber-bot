@@ -189,7 +189,7 @@ describe('AI Analysis & Google Sheet Hub', () => {
     assert.ok(buttonsFlat.some(b => b.callback_data === 'ai_prompt_expenses'));
   });
 
-  test('aiPromptDetail includes copy_text button and Excel download button', () => {
+  test('aiPromptDetail includes copy_text button and Excel download button within 256 char limit', () => {
     const samplePrompt = 'Act as an expert CFO...';
     const detail = inlineKeyboards.aiPromptDetail(samplePrompt, 'ai_prompt_profit');
     const buttonsFlat = detail.reply_markup.inline_keyboard.flat();
@@ -197,9 +197,21 @@ describe('AI Analysis & Google Sheet Hub', () => {
     const copyBtn = buttonsFlat.find(b => b.copy_text && b.copy_text.text === samplePrompt);
     assert.ok(copyBtn, 'Should have native copy_text button with prompt text');
     assert.match(copyBtn.text, /Copy Prompt/);
+    assert.ok(copyBtn.copy_text.text.length <= 256, 'copy_text must be <= 256 chars');
 
     assert.ok(buttonsFlat.some(b => b.callback_data === 'action_download_excel'), 'Should have Excel download button');
     assert.ok(buttonsFlat.some(b => b.callback_data === 'send_raw_prompt_ai_prompt_profit'), 'Should have clean text button');
+
+    // Test long prompt truncation
+    const longPrompt = 'A'.repeat(800);
+    const detailLong = inlineKeyboards.aiPromptDetail(longPrompt, 'ai_prompt_profit');
+    const longCopyBtn = detailLong.reply_markup.inline_keyboard.flat().find(b => b.copy_text);
+    assert.ok(longCopyBtn.copy_text.text.length <= 256, 'Long prompt copy_text must be capped at <= 256 chars');
+
+    // Test excelFileDelivered copy button
+    const delivered = inlineKeyboards.excelFileDelivered(longPrompt);
+    const deliveredCopyBtn = delivered.reply_markup.inline_keyboard.flat().find(b => b.copy_text);
+    assert.ok(deliveredCopyBtn.copy_text.text.length <= 256, 'Delivered file copy_text must be capped at <= 256 chars');
   });
 
   test('AI_PROMPTS generate valid prompts tailored for Excel file', () => {

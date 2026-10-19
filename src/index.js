@@ -107,9 +107,9 @@ if (!config.botToken) {
 
 const https = require('https');
 
-// Resilient HTTPS agent to handle Windows/ISP DNS edge cases
+// Resilient HTTPS agent to handle Windows/ISP DNS edge cases and prevent socket hang up
 const telegramAgent = new https.Agent({
-  keepAlive: true,
+  keepAlive: false,
   lookup: (hostname, options, cb) => {
     if (typeof options === 'function') {
       cb = options;
@@ -134,8 +134,16 @@ const telegramAgent = new https.Agent({
   }
 });
 
+const attachmentAgent = new https.Agent({
+  keepAlive: false,
+  lookup: telegramAgent.options.lookup
+});
+
 const bot = new Telegraf(config.botToken || 'dummy_token', {
-  telegram: { agent: telegramAgent }
+  telegram: {
+    agent: telegramAgent,
+    attachmentAgent: attachmentAgent
+  }
 });
 
 // Global error handler for Telegraf

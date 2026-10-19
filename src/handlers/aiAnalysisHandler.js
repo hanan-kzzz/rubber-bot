@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 const inlineKeyboards = require('../keyboards/inlineKeyboards');
 const sessionStore = require('../services/sessionStore');
 const sheetsService = require('../services/sheetsService');
@@ -147,16 +150,16 @@ async function handleDownloadExcel(ctx) {
 
   const statusMsg = await ctx.replyWithHTML(`⏳ <i>Generating your complete Excel ledger (.xlsx)... Please wait a moment.</i>`);
 
+  let tempFilePath = null;
   try {
     const buffer = await sheetsService.generateExcelBuffer();
     const today = getTodayIST();
     const filename = `Rubber_Business_Ledger_${today}.xlsx`;
     const defaultPrompt = AI_PROMPTS.ai_prompt_profit.prompt();
 
-    // Delete or edit status message
-    try {
-      await ctx.telegram.deleteMessage(ctx.chat.id, statusMsg.message_id);
-    } catch (e) {}
+    // Stream from clean temporary file to avoid keeping large multipart payload in memory
+    tempFilePath = path.join(os.tmpdir(), `Rubber_Ledger_${Date.now()}_${Math.floor(Math.random() * 10000)}.xlsx`);
+    fs.writeFileSync(tempFilePath, buffer);
 
     const caption =
       `📊 <b>Rubber Business Ledger (.xlsx)</b>\n` +
@@ -168,14 +171,39 @@ async function handleDownloadExcel(ctx) {
       `2. Tap <b>📋 Copy Profit Audit Prompt</b> below.\n` +
       `3. Open <b>ChatGPT, Claude, or Gemini</b>, attach this file, and paste the prompt!`;
 
-    return await ctx.replyWithDocument({
-      source: buffer,
-      filename: filename
-    }, {
-      caption: caption,
-      parse_mode: 'HTML',
-      ...inlineKeyboards.excelFileDelivered(defaultPrompt)
-    });
+    // Attempt upload with automatic retry if network socket hiccups
+    let delivered = null;
+    let lastErr = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        delivered = await ctx.replyWithDocument({
+          source: tempFilePath,
+          filename: filename
+        }, {
+          caption: caption,
+          parse_mode: 'HTML',
+          ...inlineKeyboards.excelFileDelivered(defaultPrompt)
+        });
+        break;
+      } catch (err) {
+        lastErr = err;
+        logger.warn(`Excel upload attempt ${attempt} failed: ${err.message}`);
+        if (attempt === 1) {
+          await new Promise(r => setTimeout(r, 1500));
+        }
+      }
+    }
+
+    if (!delivered) {
+      throw lastErr || new Error('Upload failed after retries');
+    }
+
+    // Clean up loading message after successful delivery
+    try {
+      await ctx.telegram.deleteMessage(ctx.chat.id, statusMsg.message_id);
+    } catch (e) {}
+
+    return delivered;
 
   } catch (err) {
     logger.error('Error generating Excel file:', err);
@@ -186,6 +214,13 @@ async function handleDownloadExcel(ctx) {
       `❌ <b>Could not generate Excel file:</b>\n${escapeHtml(err.message)}`,
       inlineKeyboards.returnToMainMenu()
     );
+  } finally {
+    // Safely remove temporary file
+    if (tempFilePath) {
+      try {
+        if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+      } catch (e) {}
+    }
   }
 }
 

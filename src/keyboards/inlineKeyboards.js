@@ -435,8 +435,12 @@ const inlineKeyboards = {
   aiPromptDetail: (promptText, currentKey) => {
     const buttons = [];
     if (promptText) {
+      // Telegram copy_text limit is strictly 1-256 characters
+      const safeText = promptText.length <= 250
+        ? promptText
+        : promptText.slice(0, 245) + '...';
       buttons.push([
-        { text: '📋 Copy Prompt to Clipboard', copy_text: { text: promptText } }
+        { text: '📋 Copy Prompt to Clipboard', copy_text: { text: safeText } }
       ]);
     }
     buttons.push([
@@ -475,8 +479,12 @@ const inlineKeyboards = {
   excelFileDelivered: (promptText = null) => {
     const buttons = [];
     if (promptText) {
+      // Telegram copy_text limit is strictly 1-256 characters
+      const safeText = promptText.length <= 250
+        ? promptText
+        : 'Act as CFO for my rubber business. Analyze the attached Rubber_Business_Ledger.xlsx: provide executive profit audit, top customers, staff wage variances, goods margins, and 3 cost-cutting recommendations.';
       buttons.push([
-        { text: '📋 Copy Profit Audit Prompt', copy_text: { text: promptText } }
+        { text: '📋 Copy Quick AI Prompt', copy_text: { text: safeText } }
       ]);
     }
     buttons.push([
