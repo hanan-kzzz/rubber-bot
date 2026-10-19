@@ -24,6 +24,19 @@ A complete, production-ready Telegram accounting tracker designed specifically f
 
 ## 🚀 Features
 
+- **👑 Attractive Executive Dashboard (In Telegram & Web App):**
+  - **In-Telegram Dashboard (`/dashboard`):**
+    - High-impact visual overview with box-drawing cards, color-coded badges (🟢 Surplus / 🔴 Deficit), and ASCII/emoji inflow-outflow balance bars (`[🟩🟩🟩🟩🟩🟩🟩🟥🟥🟥] 70% Inflow`).
+    - One-tap period switchers: `⚡ Today`, `🗓️ Last 7 Days`, `📅 This Month`, `🌐 All-Time`.
+    - Deep-dive buttons for `📦 Goods Trade` and `👷 Staff Wages` ledger breakdown.
+    - One-tap launcher button to open the full visual Web App directly inside Telegram or in any browser.
+  - **Modern Responsive Web Dashboard (`/dashboard` & `/webapp`):**
+    - Built-in glassmorphism dark theme designed specifically for the rubber estate business.
+    - Interactive **Chart.js** data visualizations: Daily Cashflow Trend (Grouped Bar chart) and Operational Expense Distribution (Doughnut chart).
+    - Real-time KPI cards: Total Revenue, Total Expenses, Net Cashflow (with dynamic glow), Goods Net Margin, Staff Wages Paid, and Travel costs.
+    - Interactive Ledger table with instant live search and category/type filter chips (`All`, `Income`, `Expenses`, `Wages`).
+    - Seamless **Telegram Mini App (WebApp)** integration with haptic feedback and responsive mobile/desktop viewports.
+    - Instant Live Google Sheets Sync with automatic fallback to rich sample demo preview data.
 - **Clickable Inline Keyboard Interface:** No need to memorize commands or type category numbers.
 - **Categorized Income Management:**
   - Rubber Sales, Goods Income, Customer Payments, Other Income.

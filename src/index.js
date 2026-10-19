@@ -81,7 +81,14 @@ const {
 } = require('./handlers/customerHandler');
 
 const { showRecentTransactions } = require('./handlers/recentHandler');
-const { showAiAnalysisMenu, showAiPromptDetail } = require('./handlers/aiAnalysisHandler');
+const {
+  showAiAnalysisMenu,
+  showAiPromptDetail,
+  handleDownloadExcel,
+  handleSendRawPrompt
+} = require('./handlers/aiAnalysisHandler');
+const { showDashboard, handleDashboardCallback } = require('./handlers/dashboardHandler');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 
 // Validate minimum required setup
 if (!config.botToken) {
@@ -145,6 +152,7 @@ bot.use(authMiddleware());
 // 1. COMMAND HANDLERS
 // ==========================================
 bot.command(['start', 'menu'], async (ctx) => showMainMenu(ctx, false));
+bot.command(['dashboard', 'dash', 'stats'], async (ctx) => showDashboard(ctx));
 bot.command('help', async (ctx) => showHelp(ctx));
 bot.command('income', async (ctx) => startIncomeFlow(ctx));
 bot.command('expense', async (ctx) => startExpenseMenu(ctx));
@@ -156,6 +164,7 @@ bot.command('recent', async (ctx) => showRecentTransactions(ctx));
 bot.command(['employees', 'employee'], async (ctx) => showEmployeeMenu(ctx));
 bot.command(['customers', 'customer'], async (ctx) => showCustomerMenu(ctx));
 bot.command(['ai', 'sheet', 'sheets', 'analysis'], async (ctx) => showAiAnalysisMenu(ctx));
+bot.command(['excel', 'download', 'file', 'export'], async (ctx) => handleDownloadExcel(ctx));
 
 // ==========================================
 // 2. CALLBACK QUERY ROUTING
@@ -338,6 +347,9 @@ bot.on('callback_query', async (ctx) => {
   }
 
   // Main Menu Shortcuts
+  if (data === 'menu_dashboard' || data.startsWith('dash_')) {
+    return handleDashboardCallback(ctx);
+  }
   if (data === 'menu_income') return startIncomeFlow(ctx);
   if (data === 'menu_expense') return startExpenseMenu(ctx);
   if (data === 'menu_wages') return startWagesFlow(ctx);
@@ -348,7 +360,12 @@ bot.on('callback_query', async (ctx) => {
   if (data === 'menu_employees') return showEmployeeMenu(ctx);
   if (data === 'menu_customers') return showCustomerMenu(ctx);
   if (data === 'menu_ai_analysis') return showAiAnalysisMenu(ctx);
+  if (data === 'action_download_excel') return handleDownloadExcel(ctx);
   if (data.startsWith('ai_prompt_')) return showAiPromptDetail(ctx, data);
+  if (data.startsWith('send_raw_prompt_')) {
+    const key = data.replace('send_raw_prompt_', '');
+    return handleSendRawPrompt(ctx, key);
+  }
 
   // Income Category and Customer Selection
   if (data.startsWith('inc_cat_')) {
@@ -512,6 +529,9 @@ bot.on('text', async (ctx) => {
 const app = express();
 app.use(express.json());
 
+// Mount Web Dashboard and REST API routes (/dashboard, /webapp, /api/dashboard/stats)
+app.use(dashboardRoutes);
+
 // Telegram Webhook Handler: uses handleUpdate with express.json()
 app.post('/webhook', async (req, res) => {
   try {
@@ -525,14 +545,18 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
-// Health Check Endpoint (Render checks this to ensure app is alive)
+// Root & Health Check Endpoint (Render checks this to ensure app is alive)
 app.get('/', (req, res) => {
+  if (req.headers.accept && req.headers.accept.includes('text/html') && !req.query.health) {
+    return res.redirect('/dashboard');
+  }
   res.json({
     status: 'ONLINE',
     service: 'Rubber Business Telegram Bot',
     timestamp: new Date().toISOString(),
     mode: config.webhookDomain ? 'WEBHOOK' : 'POLLING',
     webhookDomain: config.webhookDomain || 'None (Local Polling)',
+    dashboardUrl: `${config.webhookDomain || 'http://localhost:' + config.port}/dashboard`,
     ownerConfigured: Boolean(config.ownerId),
     googleScriptConfigured: Boolean(config.googleScriptUrl)
   });

@@ -141,15 +141,62 @@ async function handleIncomeTextInput(ctx) {
     }
 
     sessionStore.update(userId, {
-      step: 'AWAITING_DATE',
+      step: 'AWAITING_PAYMENT_STATUS',
       data: {
         sourceOrPurpose: text,
         customerName: text
       }
     });
 
+    const totalAmt = session.data?.amount || 0;
     return ctx.replyWithHTML(
-      `👤 Customer: <b>${escapeHtml(text)}</b>\n\n` +
+      `👤 Customer: <b>${escapeHtml(text)}</b>\n` +
+      `💰 Total Amount: <b>${formatINR(totalAmt)}</b>\n\n` +
+      `💳 <b>Select Payment Status:</b>\n` +
+      `• <b>Fully Paid:</b> Customer paid entire amount\n` +
+      `• <b>Not Paid (Unpaid):</b> Pending payment / parcel due\n` +
+      `• <b>Partial / Parcel Paid:</b> Partial amount received now`,
+      inlineKeyboards.paymentStatusSelection()
+    );
+  }
+
+  // 2b. Partial / Parcel payment amount input step
+  if (session.step === 'AWAITING_PARTIAL_AMOUNT') {
+    const cleaned = text.replace(/,/g, '').replace(/₹/g, '').replace(/rs\.?/gi, '').replace(/\/[-]/g, '').trim();
+    const partialAmt = parseFloat(cleaned);
+    const totalAmt = session.data?.amount || 0;
+
+    if (isNaN(partialAmt) || partialAmt <= 0) {
+      return ctx.replyWithHTML(
+        `⚠️ <b>Invalid Amount!</b>\n` +
+        `Please enter a valid positive number for the partial amount received in Rupees:`,
+        inlineKeyboards.cancelOnly()
+      );
+    }
+
+    if (partialAmt >= totalAmt) {
+      return ctx.replyWithHTML(
+        `⚠️ <b>Amount exceeds or equals total!</b>\n` +
+        `The entered amount (<b>${formatINR(partialAmt)}</b>) is equal to or greater than the total bill (<b>${formatINR(totalAmt)}</b>).\n\n` +
+        `If the entire amount was received, please select <b>Fully Paid</b>. Otherwise enter the partial amount:`,
+        inlineKeyboards.cancelOnly()
+      );
+    }
+
+    const balDue = totalAmt - partialAmt;
+    sessionStore.update(userId, {
+      step: 'AWAITING_DATE',
+      data: {
+        paymentStatus: 'Partial Paid',
+        paidAmount: partialAmt,
+        balanceDue: balDue
+      }
+    });
+
+    return ctx.replyWithHTML(
+      `📦 <b>Partial / Parcel Payment Set:</b>\n` +
+      `• Received Now: <b>${formatINR(partialAmt)}</b>\n` +
+      `• Customer Balance Due: 🔴 <b>${formatINR(balDue)}</b>\n\n` +
       `📅 <b>Select Transaction Date:</b>\n` +
       `Choose today, yesterday, or type a custom date:`,
       inlineKeyboards.dateSelection()
@@ -320,28 +367,125 @@ async function handleCustomerSelection(ctx, callbackData) {
   }
 
   sessionStore.update(userId, {
-    step: 'AWAITING_DATE',
+    step: 'AWAITING_PAYMENT_STATUS',
     data: {
       sourceOrPurpose: customerName,
       customerName: customerName
     }
   });
 
+  const totalAmt = session.data?.amount || 0;
   const text = 
-    `👤 Customer: <b>${escapeHtml(customerName)}</b>\n\n` +
-    `📅 <b>Select Transaction Date:</b>\n` +
-    `Choose today, yesterday, or type a custom date:`;
+    `👤 Customer: <b>${escapeHtml(customerName)}</b>\n` +
+    `💰 Total Amount: <b>${formatINR(totalAmt)}</b>\n\n` +
+    `💳 <b>Select Payment Status:</b>\n` +
+    `• <b>Fully Paid:</b> Customer paid entire amount\n` +
+    `• <b>Not Paid (Unpaid):</b> Pending payment / parcel due\n` +
+    `• <b>Partial / Parcel Paid:</b> Partial amount received now`;
 
   if (ctx.callbackQuery) {
     try {
       return await ctx.editMessageText(text, {
         parse_mode: 'HTML',
-        ...inlineKeyboards.dateSelection()
+        ...inlineKeyboards.paymentStatusSelection()
       });
     } catch (e) {}
   }
 
-  return ctx.replyWithHTML(text, inlineKeyboards.dateSelection());
+  return ctx.replyWithHTML(text, inlineKeyboards.paymentStatusSelection());
+}
+
+/**
+ * Handle payment status selection (Paid, Not Paid, Partial Paid)
+ */
+async function handlePaymentStatusSelection(ctx, callbackData) {
+  const userId = ctx.from.id;
+  const session = sessionStore.get(userId);
+
+  if (!session || session.flow !== FLOW) return false;
+
+  const totalAmt = session.data?.amount || 0;
+
+  if (callbackData === 'inc_pay_paid') {
+    sessionStore.update(userId, {
+      step: 'AWAITING_DATE',
+      data: {
+        paymentStatus: 'Paid',
+        paidAmount: totalAmt,
+        balanceDue: 0
+      }
+    });
+
+    const text = 
+      `💳 Status: <b>✅ Fully Paid (${formatINR(totalAmt)})</b>\n\n` +
+      `📅 <b>Select Transaction Date:</b>\n` +
+      `Choose today, yesterday, or type a custom date:`;
+
+    if (ctx.callbackQuery) {
+      try {
+        return await ctx.editMessageText(text, {
+          parse_mode: 'HTML',
+          ...inlineKeyboards.dateSelection()
+        });
+      } catch (e) {}
+    }
+    return ctx.replyWithHTML(text, inlineKeyboards.dateSelection());
+  }
+
+  if (callbackData === 'inc_pay_unpaid') {
+    sessionStore.update(userId, {
+      step: 'AWAITING_DATE',
+      data: {
+        paymentStatus: 'Not Paid',
+        paidAmount: 0,
+        balanceDue: totalAmt
+      }
+    });
+
+    const text = 
+      `💳 Status: ⏳ <b>Not Paid (Unpaid)</b>\n` +
+      `• Customer Balance Due: 🔴 <b>${formatINR(totalAmt)}</b>\n\n` +
+      `📅 <b>Select Transaction Date:</b>\n` +
+      `Choose today, yesterday, or type a custom date:`;
+
+    if (ctx.callbackQuery) {
+      try {
+        return await ctx.editMessageText(text, {
+          parse_mode: 'HTML',
+          ...inlineKeyboards.dateSelection()
+        });
+      } catch (e) {}
+    }
+    return ctx.replyWithHTML(text, inlineKeyboards.dateSelection());
+  }
+
+  if (callbackData === 'inc_pay_partial') {
+    sessionStore.update(userId, {
+      step: 'AWAITING_PARTIAL_AMOUNT',
+      data: {
+        paymentStatus: 'Partial Paid'
+      }
+    });
+
+    const text = 
+      `📦 <b>Partial / Parcel Payment</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
+      `Total Bill: <b>${formatINR(totalAmt)}</b>\n\n` +
+      `💵 <b>Enter the amount received now in Indian Rupees (₹):</b>\n` +
+      `<i>(e.g., <code>15000</code>. Remaining will be recorded as customer due)</i>`;
+
+    if (ctx.callbackQuery) {
+      try {
+        return await ctx.editMessageText(text, {
+          parse_mode: 'HTML',
+          ...inlineKeyboards.cancelOnly()
+        });
+      } catch (e) {}
+    }
+    return ctx.replyWithHTML(text, inlineKeyboards.cancelOnly());
+  }
+
+  return false;
 }
 
 /**
@@ -377,7 +521,10 @@ async function handleConfirmSave(ctx) {
       travelDetails: '',
       description: session.data.description || '',
       enteredBy: senderName,
-      telegramUserId: String(userId)
+      telegramUserId: String(userId),
+      paymentStatus: session.data.paymentStatus || 'Paid',
+      paidAmount: session.data.paidAmount !== undefined ? session.data.paidAmount : session.data.amount,
+      balanceDue: session.data.balanceDue !== undefined ? session.data.balanceDue : 0
     };
 
     const res = await sheetsService.addTransaction(payload);
@@ -402,11 +549,19 @@ async function handleConfirmSave(ctx) {
     // Successfully saved
     sessionStore.clear(userId);
 
+    let payStatusStr = '✅ Fully Paid';
+    if ((session.data.paymentStatus || '').toLowerCase() === 'not paid') {
+      payStatusStr = `⏳ <b>Not Paid</b> (Due: 🔴 ${formatINR(session.data.balanceDue !== undefined ? session.data.balanceDue : session.data.amount)})`;
+    } else if ((session.data.paymentStatus || '').toLowerCase() === 'partial paid') {
+      payStatusStr = `📦 <b>Partial Paid</b> (Received: ${formatINR(session.data.paidAmount || 0)} | Due: 🔴 ${formatINR(session.data.balanceDue || 0)})`;
+    }
+
     const successText = 
       `✅ <b>Income Recorded Successfully!</b>\n` +
       `━━━━━━━━━━━━━━━━━━━━━\n` +
       `🆔 <b>Tx ID:</b> <code>${txId}</code>\n` +
-      `💰 <b>Amount:</b> <b>${formatINR(session.data.amount)}</b>\n` +
+      `💰 <b>Total Amount:</b> <b>${formatINR(session.data.amount)}</b>\n` +
+      `💳 <b>Payment:</b> ${payStatusStr}\n` +
       `📁 <b>Category:</b> ${escapeHtml(session.data.category)}\n` +
       `👤 <b>Customer/Source:</b> ${escapeHtml(session.data.sourceOrPurpose)}\n` +
       `📅 <b>Date:</b> ${session.data.transactionDate}\n` +
@@ -427,6 +582,7 @@ module.exports = {
   startIncomeFlow,
   handleCategorySelection,
   handleCustomerSelection,
+  handlePaymentStatusSelection,
   handleIncomeTextInput,
   handleDateSelection,
   handleSkipNote,

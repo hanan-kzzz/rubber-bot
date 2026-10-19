@@ -82,6 +82,13 @@ class SheetsService {
   }
 
   /**
+   * Delete a transaction from Google Sheets by ID
+   */
+  async deleteTransaction(transactionId) {
+    return this.request('deleteTransaction', { transactionId });
+  }
+
+  /**
    * Get report summary for a date range (inclusive, YYYY-MM-DD)
    */
   async getReport(startDate, endDate) {
@@ -167,6 +174,81 @@ class SheetsService {
    */
   getSpreadsheetUrl() {
     return config.googleSheetUrl || this.cachedSpreadsheetUrl || 'https://docs.google.com/spreadsheets/d/1qRVPKZ5W_Y6_VLQxLLL2FRrjijWIRdkQbl0TOA_y6xc/edit';
+  }
+
+  /**
+   * Fetch all raw data from Google Sheets
+   */
+  async getAllData() {
+    return this.request('getAllData');
+  }
+
+  /**
+   * Generates a complete .xlsx Excel workbook Buffer with all ledger sheets
+   */
+  async generateExcelBuffer() {
+    const XLSX = require('xlsx');
+    const wb = XLSX.utils.book_new();
+
+    let rawData = null;
+    try {
+      rawData = await this.getAllData();
+    } catch (e) {
+      logger.warn('Could not fetch getAllData from Apps Script:', e.message);
+    }
+
+    if (rawData && rawData.success && rawData.sheets && Object.keys(rawData.sheets).length > 0) {
+      const sheetNames = ['Transactions', 'Employees', 'Customers', 'Categories'];
+      sheetNames.forEach(name => {
+        if (Array.isArray(rawData.sheets[name]) && rawData.sheets[name].length > 0) {
+          const ws = XLSX.utils.aoa_to_sheet(rawData.sheets[name]);
+          XLSX.utils.book_append_sheet(wb, ws, name);
+        }
+      });
+    }
+
+    // Fallback if sheets could not be loaded via getAllData
+    if (wb.SheetNames.length === 0) {
+      logger.info('Using individual service calls for Excel workbook generation...');
+      const [txRes, empRes, custRes] = await Promise.all([
+        this.getRecentTransactions(1000).catch(() => ({ success: false })),
+        this.getEmployees(false).catch(() => ({ success: false })),
+        this.getCustomers(false).catch(() => ({ success: false }))
+      ]);
+
+      const txHeaders = ['Transaction ID', 'Date', 'Type', 'Category', 'Amount (₹)', 'Party / Source', 'Staff Name', 'Route', 'Description'];
+      const txRows = [txHeaders];
+      if (txRes && txRes.success && Array.isArray(txRes.transactions)) {
+        txRes.transactions.forEach(t => {
+          txRows.push([
+            t.id || '',
+            t.date || '',
+            t.type || '',
+            t.category || '',
+            t.amount || 0,
+            t.sourceOrPurpose || '',
+            t.employeeName || '',
+            t.travelDetails || '',
+            t.description || ''
+          ]);
+        });
+      }
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(txRows), 'Transactions');
+
+      const empRows = [['Employee ID', 'Employee Name', 'Status']];
+      if (empRes && empRes.success && Array.isArray(empRes.employees)) {
+        empRes.employees.forEach(e => empRows.push([e.id, e.name, e.status]));
+      }
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(empRows), 'Employees');
+
+      const custRows = [['Customer ID', 'Customer Name', 'Status']];
+      if (custRes && custRes.success && Array.isArray(custRes.customers)) {
+        custRes.customers.forEach(c => custRows.push([c.id, c.name, c.status]));
+      }
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(custRows), 'Customers');
+    }
+
+    return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
   }
 }
 

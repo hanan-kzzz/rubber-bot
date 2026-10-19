@@ -3,7 +3,7 @@ const inlineKeyboards = require('../keyboards/inlineKeyboards');
 const sessionStore = require('../services/sessionStore');
 const sheetsService = require('../services/sheetsService');
 const { requireOwner } = require('../middleware/auth');
-const { escapeHtml } = require('../utils/formatter');
+const { formatINR, escapeHtml } = require('../utils/formatter');
 const logger = require('../utils/logger');
 
 const FLOW = 'CUSTOMER_MGMT';
@@ -19,6 +19,7 @@ async function showCustomerMenu(ctx) {
     `━━━━━━━━━━━━━━━━━━━━━\n` +
     `Manage your rubber buyers and customers:\n\n` +
     `• Registered customers appear as quick one-tap buttons when recording income.\n` +
+    `• Tracks paid amounts and pending dues / unpaid parcels per customer.\n` +
     `• New customers entered during income recording are also auto-saved here.`;
 
   if (ctx.callbackQuery) {
@@ -90,7 +91,18 @@ async function showCustomerList(ctx) {
     customers.forEach(c => {
       const statusIcon = c.status.toLowerCase() === 'active' ? '🟢' : '🔴';
       text += `• <b>${escapeHtml(c.name)}</b> [<code>${c.id}</code>]\n`;
-      text += `  Status: ${statusIcon} <i>${c.status}</i>\n\n`;
+      text += `  Status: ${statusIcon} <i>${c.status}</i>\n`;
+
+      if (c.totalIncome !== undefined && c.totalIncome > 0) {
+        text += `  💰 Total Billed: ${formatINR(c.totalIncome)}\n`;
+        text += `  💵 Received: ${formatINR(c.totalPaid || 0)}\n`;
+        if (c.balanceDue > 0) {
+          text += `  ⚠️ <b>Pending Due:</b> 🔴 <b>${formatINR(c.balanceDue)}</b>\n`;
+        } else {
+          text += `  ✅ <b>Balance:</b> <i>All Cleared</i>\n`;
+        }
+      }
+      text += `\n`;
     });
 
     return ctx.replyWithHTML(text, inlineKeyboards.customerManagement());
@@ -212,10 +224,69 @@ async function handleCustomerTextInput(ctx) {
   return false;
 }
 
+/**
+ * View Customer Balances & Pending Dues
+ */
+async function showCustomerDues(ctx) {
+  if (!requireOwner(ctx)) return;
+
+  if (ctx.callbackQuery) {
+    try {
+      await ctx.answerCbQuery('💰 Loading customer dues...');
+    } catch (e) {}
+  }
+
+  try {
+    const res = await sheetsService.getCustomers(false);
+    if (!res.success) {
+      return ctx.replyWithHTML(`❌ Failed to fetch customers: ${escapeHtml(res.error)}`, inlineKeyboards.customerManagement());
+    }
+
+    const customers = res.customers || [];
+    const withDues = customers.filter(c => (c.balanceDue || 0) > 0);
+
+    if (withDues.length === 0) {
+      const allClearedText = 
+        `💰 <b>Customer Balances & Dues</b>\n` +
+        `━━━━━━━━━━━━━━━━━━━━━\n\n` +
+        `🎉 <b>All Customer Accounts Are Cleared!</b>\n` +
+        `There are currently no unpaid parcels or pending customer balances.\n\n` +
+        `<i>Total registered customers: ${customers.length}</i>`;
+
+      return ctx.replyWithHTML(allClearedText, inlineKeyboards.customerManagement());
+    }
+
+    let totalPending = 0;
+    let text = `💰 <b>Customer Outstanding Dues / Pending Parcels</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+    withDues.forEach((c, idx) => {
+      totalPending += (c.balanceDue || 0);
+      text += `<b>${idx + 1}. ${escapeHtml(c.name)}</b> [<code>${c.id}</code>]\n`;
+      text += `   ⚠️ <b>Due Amount:</b> 🔴 <b>${formatINR(c.balanceDue)}</b>\n`;
+      text += `   💰 Total Billed: ${formatINR(c.totalIncome || 0)}\n`;
+      text += `   💵 Paid so far: ${formatINR(c.totalPaid || 0)}\n`;
+      if (c.unpaidCount) {
+        text += `   📦 Unpaid Transactions: ${c.unpaidCount}\n`;
+      }
+      text += `\n`;
+    });
+
+    text += `━━━━━━━━━━━━━━━━━━━━━\n`;
+    text += `🔴 <b>Total Pending Receivables:</b> <b>${formatINR(totalPending)}</b>\n`;
+    text += `<i>Total ${withDues.length} customer(s) with pending balance.</i>`;
+
+    return ctx.replyWithHTML(text, inlineKeyboards.customerManagement());
+  } catch (err) {
+    logger.error('Error fetching customer dues:', err);
+    return ctx.replyWithHTML(`❌ Error: ${escapeHtml(err.message)}`, inlineKeyboards.customerManagement());
+  }
+}
+
 module.exports = {
   showCustomerMenu,
   startAddCustomer,
   showCustomerList,
+  showCustomerDues,
   showToggleCustomerStatusMenu,
   handleToggleCustomerStatusAction,
   handleCustomerTextInput

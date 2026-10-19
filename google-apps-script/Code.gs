@@ -76,6 +76,10 @@ function doPost(e) {
         result = handleAddTransaction(requestData.data);
         break;
 
+      case "deleteTransaction":
+        result = handleDeleteTransaction(requestData.transactionId);
+        break;
+
       case "getReport":
         result = handleGetReport(requestData.startDate, requestData.endDate);
         break;
@@ -118,6 +122,10 @@ function doPost(e) {
 
       case "getSheetInfo":
         result = handleGetSheetInfo();
+        break;
+
+      case "getAllData":
+        result = handleGetAllData();
         break;
 
       default:
@@ -205,7 +213,10 @@ function initSheets() {
       "Travel Details",
       "Description",
       "Entered By",
-      "Telegram User ID"
+      "Telegram User ID",
+      "Payment Status",
+      "Paid Amount",
+      "Balance Due"
     ];
     txSheet.appendRow(txHeaders);
     var txHeaderRange = txSheet.getRange(1, 1, 1, txHeaders.length);
@@ -215,8 +226,10 @@ function initSheets() {
     txHeaderRange.setHorizontalAlignment("center");
     txSheet.setFrozenRows(1);
     
-    // Set column format for Amount (Col F = 6)
+    // Set column format for Amount (Col F = 6), Paid Amount (Col N = 14), Balance Due (Col O = 15)
     txSheet.getRange("F2:F").setNumberFormat("₹#,##0.00");
+    txSheet.getRange("N2:N").setNumberFormat("₹#,##0.00");
+    txSheet.getRange("O2:O").setNumberFormat("₹#,##0.00");
     txSheet.setColumnWidth(1, 180); // Tx ID
     txSheet.setColumnWidth(2, 160); // Timestamp
     txSheet.setColumnWidth(3, 130); // Date
@@ -229,6 +242,33 @@ function initSheets() {
     txSheet.setColumnWidth(10, 250); // Description
     txSheet.setColumnWidth(11, 140); // Entered By
     txSheet.setColumnWidth(12, 140); // Telegram ID
+    txSheet.setColumnWidth(13, 140); // Payment Status
+    txSheet.setColumnWidth(14, 130); // Paid Amount
+    txSheet.setColumnWidth(15, 130); // Balance Due
+  } else {
+    // Ensure columns 13, 14, 15 exist in existing Transactions sheet
+    var lastCol = txSheet.getLastColumn();
+    if (lastCol < 15) {
+      if (lastCol < 13) {
+        txSheet.getRange(1, 13).setValue("Payment Status");
+        txSheet.setColumnWidth(13, 140);
+      }
+      if (lastCol < 14) {
+        txSheet.getRange(1, 14).setValue("Paid Amount");
+        txSheet.getRange("N2:N").setNumberFormat("₹#,##0.00");
+        txSheet.setColumnWidth(14, 130);
+      }
+      if (lastCol < 15) {
+        txSheet.getRange(1, 15).setValue("Balance Due");
+        txSheet.getRange("O2:O").setNumberFormat("₹#,##0.00");
+        txSheet.setColumnWidth(15, 130);
+      }
+      var updatedHeaderRange = txSheet.getRange(1, 13, 1, 15 - Math.max(12, lastCol));
+      updatedHeaderRange.setBackground("#1b5e20");
+      updatedHeaderRange.setFontColor("#ffffff");
+      updatedHeaderRange.setFontWeight("bold");
+      updatedHeaderRange.setHorizontalAlignment("center");
+    }
   }
 
   // 2. Employees Sheet
@@ -377,6 +417,17 @@ function handleAddTransaction(data) {
   var timestamp = data.timestamp || Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd HH:mm:ss");
   var transactionDate = data.transactionDate || Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
 
+  var paymentStatus = data.paymentStatus || "Paid";
+  var numPaidAmount = (data.paidAmount !== undefined && data.paidAmount !== null && data.paidAmount !== "")
+    ? parseFloat(data.paidAmount)
+    : (paymentStatus.toLowerCase() === "not paid" ? 0 : numAmount);
+  if (isNaN(numPaidAmount)) numPaidAmount = numAmount;
+
+  var numBalanceDue = (data.balanceDue !== undefined && data.balanceDue !== null && data.balanceDue !== "")
+    ? parseFloat(data.balanceDue)
+    : (paymentStatus.toLowerCase() === "not paid" ? numAmount : (paymentStatus.toLowerCase() === "partial paid" ? Math.max(0, numAmount - numPaidAmount) : 0));
+  if (isNaN(numBalanceDue)) numBalanceDue = 0;
+
   var row = [
     data.transactionId,
     timestamp,
@@ -389,7 +440,10 @@ function handleAddTransaction(data) {
     data.travelDetails || "",            // From -> To, purpose if travel
     data.description || "",              // Custom user notes
     data.enteredBy || "",                // Telegram name
-    data.telegramUserId || ""            // Telegram numeric ID
+    data.telegramUserId || "",           // Telegram numeric ID
+    paymentStatus,                       // "Paid", "Not Paid", "Partial Paid"
+    numPaidAmount,                       // Numeric amount paid
+    numBalanceDue                        // Numeric balance due
   ];
 
   sheet.appendRow(row);
@@ -398,6 +452,8 @@ function handleAddTransaction(data) {
   // Apply formatting to the newly appended row
   sheet.getRange(newRowIndex, 6).setNumberFormat("₹#,##0.00");
   sheet.getRange(newRowIndex, 3).setNumberFormat("yyyy-mm-dd");
+  sheet.getRange(newRowIndex, 14).setNumberFormat("₹#,##0.00");
+  sheet.getRange(newRowIndex, 15).setNumberFormat("₹#,##0.00");
 
   return {
     success: true,
@@ -405,6 +461,9 @@ function handleAddTransaction(data) {
     amount: numAmount,
     type: data.type,
     category: data.category,
+    paymentStatus: paymentStatus,
+    paidAmount: numPaidAmount,
+    balanceDue: numBalanceDue,
     date: transactionDate,
     rowNumber: newRowIndex
   };
@@ -437,10 +496,12 @@ function handleGetReport(startDate, endDate) {
   }
 
   var lastRow = sheet.getLastRow();
-  var values = sheet.getRange(2, 1, lastRow - 1, 12).getValues();
+  var maxCols = Math.max(12, sheet.getLastColumn());
+  var values = sheet.getRange(2, 1, lastRow - 1, maxCols).getValues();
 
   var totalIncome = 0;
   var totalExpenses = 0;
+  var totalReceivablesDue = 0;
   var goodsIncome = 0;
   var goodsPurchases = 0;
   var staffWages = 0;
@@ -475,10 +536,22 @@ function handleGetReport(startDate, endDate) {
     var category = String(row[4]).trim();
     var amount = parseFloat(row[5]) || 0;
 
+    var status = row.length >= 13 && row[12] ? String(row[12]).trim() : "Paid";
+    var paidAmt = (row.length >= 14 && row[13] !== "" && row[13] !== undefined)
+      ? parseFloat(row[13])
+      : (status.toLowerCase() === "not paid" ? 0 : amount);
+    var balDue = (row.length >= 15 && row[14] !== "" && row[14] !== undefined)
+      ? parseFloat(row[14])
+      : (status.toLowerCase() === "not paid" ? amount : (status.toLowerCase() === "partial paid" ? Math.max(0, amount - paidAmt) : 0));
+
+    if (isNaN(paidAmt)) paidAmt = amount;
+    if (isNaN(balDue)) balDue = 0;
+
     transactionCount++;
 
     if (type.toLowerCase() === "income") {
       totalIncome += amount;
+      totalReceivablesDue += balDue;
       if (category.toLowerCase() === "goods income") {
         goodsIncome += amount;
       }
@@ -511,7 +584,10 @@ function handleGetReport(startDate, endDate) {
       employeeName: row[7],
       travelDetails: row[8],
       description: row[9],
-      enteredBy: row[10]
+      enteredBy: row[10],
+      paymentStatus: status,
+      paidAmount: paidAmt,
+      balanceDue: balDue
     });
   }
 
@@ -526,6 +602,7 @@ function handleGetReport(startDate, endDate) {
     totalIncome: Math.round(totalIncome * 100) / 100,
     totalExpenses: Math.round(totalExpenses * 100) / 100,
     netCashflow: Math.round(netCashflow * 100) / 100,
+    totalReceivablesDue: Math.round(totalReceivablesDue * 100) / 100,
     goodsIncome: Math.round(goodsIncome * 100) / 100,
     goodsPurchases: Math.round(goodsPurchases * 100) / 100,
     goodsDifference: Math.round(goodsDifference * 100) / 100,
@@ -550,8 +627,9 @@ function handleGetRecentTransactions(limit) {
   var lastRow = sheet.getLastRow();
   var startRow = Math.max(2, lastRow - limit + 1);
   var numRows = lastRow - startRow + 1;
+  var maxCols = Math.max(12, sheet.getLastColumn());
 
-  var values = sheet.getRange(startRow, 1, numRows, 12).getValues();
+  var values = sheet.getRange(startRow, 1, numRows, maxCols).getValues();
   var list = [];
 
   for (var i = values.length - 1; i >= 0; i--) { // Reverse order: most recent first
@@ -565,22 +643,80 @@ function handleGetRecentTransactions(limit) {
       formattedTxDate = String(txDateVal).trim();
     }
 
+    var amt = parseFloat(row[5]) || 0;
+    var status = row.length >= 13 && row[12] ? String(row[12]).trim() : "Paid";
+    var paidAmt = (row.length >= 14 && row[13] !== "" && row[13] !== undefined)
+      ? parseFloat(row[13])
+      : (status.toLowerCase() === "not paid" ? 0 : amt);
+    var balDue = (row.length >= 15 && row[14] !== "" && row[14] !== undefined)
+      ? parseFloat(row[14])
+      : (status.toLowerCase() === "not paid" ? amt : (status.toLowerCase() === "partial paid" ? Math.max(0, amt - paidAmt) : 0));
+
+    if (isNaN(paidAmt)) paidAmt = amt;
+    if (isNaN(balDue)) balDue = 0;
+
     list.push({
       id: row[0],
       timestamp: row[1],
       date: formattedTxDate,
       type: row[3],
       category: row[4],
-      amount: parseFloat(row[5]) || 0,
+      amount: amt,
       sourceOrPurpose: row[6],
       employeeName: row[7],
       travelDetails: row[8],
       description: row[9],
-      enteredBy: row[10]
+      enteredBy: row[10],
+      paymentStatus: status,
+      paidAmount: paidAmt,
+      balanceDue: balDue
     });
   }
 
   return { success: true, count: list.length, transactions: list };
+}
+
+/**
+ * Delete a transaction row from Transactions sheet by ID
+ */
+function handleDeleteTransaction(transactionId) {
+  if (!transactionId || !String(transactionId).trim()) {
+    return { success: false, error: "Transaction ID is required" };
+  }
+
+  var targetId = String(transactionId).trim();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_TRANSACTIONS);
+  if (!sheet || sheet.getLastRow() <= 1) {
+    return { success: false, error: "No transactions found to delete" };
+  }
+
+  var lastRow = sheet.getLastRow();
+  var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]).trim().toUpperCase() === targetId.toUpperCase()) {
+      var rowIndex = i + 2;
+      var rowData = sheet.getRange(rowIndex, 1, 1, Math.min(15, sheet.getLastColumn())).getValues()[0];
+      sheet.deleteRow(rowIndex);
+
+      return {
+        success: true,
+        message: "Transaction deleted successfully",
+        transactionId: targetId,
+        deletedTransaction: {
+          id: targetId,
+          type: rowData[3] || "",
+          category: rowData[4] || "",
+          amount: parseFloat(rowData[5]) || 0,
+          party: rowData[6] || rowData[7] || "",
+          date: rowData[2] || ""
+        }
+      };
+    }
+  }
+
+  return { success: false, error: "Transaction ID not found: " + targetId };
 }
 
 /**
@@ -701,18 +837,65 @@ function handleToggleEmployeeStatus(employeeId) {
  */
 function handleGetCustomers(activeOnly) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(SHEET_CUSTOMERS);
-  if (!sheet) {
+  var custSheet = ss.getSheetByName(SHEET_CUSTOMERS);
+  if (!custSheet) {
     initSheets();
-    sheet = ss.getSheetByName(SHEET_CUSTOMERS);
+    custSheet = ss.getSheetByName(SHEET_CUSTOMERS);
   }
-  if (!sheet || sheet.getLastRow() <= 1) {
+  if (!custSheet || custSheet.getLastRow() <= 1) {
     return { success: true, customers: [] };
   }
 
-  var values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues();
-  var customers = [];
+  var values = custSheet.getRange(2, 1, custSheet.getLastRow() - 1, 3).getValues();
+  var txSheet = ss.getSheetByName(SHEET_TRANSACTIONS);
+  
+  // Calculate customer financials from Transactions sheet
+  var customerStats = {};
+  if (txSheet && txSheet.getLastRow() > 1) {
+    var maxCols = Math.max(12, txSheet.getLastColumn());
+    var txData = txSheet.getRange(2, 1, txSheet.getLastRow() - 1, maxCols).getValues();
+    for (var t = 0; t < txData.length; t++) {
+      var r = txData[t];
+      var txType = String(r[3]).trim().toLowerCase();
+      if (txType !== "income") continue;
 
+      var custName = String(r[6]).trim(); // SourceOrPurpose contains customer name
+      if (!custName) continue;
+      var key = custName.toLowerCase();
+
+      if (!customerStats[key]) {
+        customerStats[key] = {
+          totalIncome: 0,
+          totalPaid: 0,
+          balanceDue: 0,
+          unpaidCount: 0,
+          transactionCount: 0
+        };
+      }
+
+      var amt = parseFloat(r[5]) || 0;
+      var status = r.length >= 13 && r[12] ? String(r[12]).trim() : "Paid";
+      var paid = (r.length >= 14 && r[13] !== "" && r[13] !== undefined)
+        ? parseFloat(r[13])
+        : (status.toLowerCase() === "not paid" ? 0 : amt);
+      var due = (r.length >= 15 && r[14] !== "" && r[14] !== undefined)
+        ? parseFloat(r[14])
+        : (status.toLowerCase() === "not paid" ? amt : (status.toLowerCase() === "partial paid" ? Math.max(0, amt - paid) : 0));
+
+      if (isNaN(paid)) paid = amt;
+      if (isNaN(due)) due = 0;
+
+      customerStats[key].totalIncome += amt;
+      customerStats[key].totalPaid += paid;
+      customerStats[key].balanceDue += due;
+      customerStats[key].transactionCount++;
+      if (status.toLowerCase() !== "paid" || due > 0) {
+        customerStats[key].unpaidCount++;
+      }
+    }
+  }
+
+  var customers = [];
   for (var i = 0; i < values.length; i++) {
     var id = String(values[i][0]).trim();
     var name = String(values[i][1]).trim();
@@ -724,10 +907,23 @@ function handleGetCustomers(activeOnly) {
       continue;
     }
 
+    var stats = customerStats[name.toLowerCase()] || {
+      totalIncome: 0,
+      totalPaid: 0,
+      balanceDue: 0,
+      unpaidCount: 0,
+      transactionCount: 0
+    };
+
     customers.push({
       id: id,
       name: name,
-      status: status || "Active"
+      status: status || "Active",
+      totalIncome: Math.round(stats.totalIncome * 100) / 100,
+      totalPaid: Math.round(stats.totalPaid * 100) / 100,
+      balanceDue: Math.round(stats.balanceDue * 100) / 100,
+      unpaidCount: stats.unpaidCount,
+      transactionCount: stats.transactionCount
     });
   }
 
@@ -826,6 +1022,32 @@ function handleGetSheetInfo() {
     spreadsheetId: ss.getId(),
     spreadsheetName: ss.getName(),
     spreadsheetUrl: ss.getUrl()
+  };
+}
+
+/**
+ * Returns all sheets and rows for Excel export
+ */
+function handleGetAllData() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetNames = [SHEET_TRANSACTIONS, SHEET_EMPLOYEES, SHEET_CUSTOMERS, SHEET_CATEGORIES];
+  var data = {};
+
+  for (var i = 0; i < sheetNames.length; i++) {
+    var name = sheetNames[i];
+    var sheet = ss.getSheetByName(name);
+    if (sheet && sheet.getLastRow() >= 1 && sheet.getLastColumn() >= 1) {
+      data[name] = sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn()).getValues();
+    } else {
+      data[name] = [];
+    }
+  }
+
+  return {
+    success: true,
+    spreadsheetName: ss.getName() || "Rubber_Business_Ledger",
+    spreadsheetUrl: ss.getUrl(),
+    sheets: data
   };
 }
 

@@ -9,6 +9,10 @@ const inlineKeyboards = {
   mainMenu: (isOwner = false) => {
     const buttons = [
       [
+        Markup.button.callback('👑 Executive Dashboard 📊', 'menu_dashboard'),
+        Markup.button.callback('🤖 AI Analysis & Sheet Link', 'menu_ai_analysis')
+      ],
+      [
         Markup.button.callback('➕ Add Income', 'menu_income'),
         Markup.button.callback('➖ Add Expense', 'menu_expense')
       ],
@@ -29,7 +33,7 @@ const inlineKeyboards = {
         Markup.button.callback('❓ Help', 'menu_help')
       ],
       [
-        Markup.button.callback('🤖 AI Analysis & Sheet Link', 'menu_ai_analysis')
+        Markup.button.callback('📥 Excel File & AI Prompts', 'menu_ai_analysis')
       ]
     ];
 
@@ -223,6 +227,75 @@ const inlineKeyboards = {
   },
 
   /**
+   * Action buttons for Recent Transactions screen
+   */
+  recentActions: (hasTransactions = true) => {
+    const buttons = [];
+    if (hasTransactions) {
+      buttons.push([
+        Markup.button.callback('🗑️ Delete / Remove an Entry', 'recent_delete_prompt')
+      ]);
+    }
+    buttons.push([
+      Markup.button.callback('🤖 AI Sheet Analysis', 'menu_ai_analysis'),
+      Markup.button.callback('🏠 Main Menu', 'action_main_menu')
+    ]);
+    return Markup.inlineKeyboard(buttons);
+  },
+
+  /**
+   * Keyboard to pick which recent transaction to delete
+   */
+  deletePickFromRecent: (txs = []) => {
+    const buttons = [];
+    txs.slice(0, 8).forEach((tx) => {
+      const typeIcon = (tx.type || '').toLowerCase() === 'income' ? '➕' : '➖';
+      const party = tx.employeeName || tx.sourceOrPurpose || tx.category || 'Entry';
+      const shortParty = String(party).slice(0, 14);
+      const label = `🗑️ ${typeIcon} ₹${tx.amount} (${shortParty})`;
+      buttons.push([Markup.button.callback(label, `tx_del_pick_${tx.id}`)]);
+    });
+    buttons.push([
+      Markup.button.callback('✍️ Enter Transaction ID Manually', 'tx_del_manual')
+    ]);
+    buttons.push([
+      Markup.button.callback('⬅️ Back to Recent Records', 'menu_recent'),
+      Markup.button.callback('🏠 Main Menu', 'action_main_menu')
+    ]);
+    return Markup.inlineKeyboard(buttons);
+  },
+
+  /**
+   * Confirmation keyboard for deleting a transaction
+   */
+  deleteConfirm: (txId) => {
+    return Markup.inlineKeyboard([
+      [
+        Markup.button.callback('🗑️ Yes, Delete Transaction', `tx_del_confirm_${txId}`),
+        Markup.button.callback('❌ No, Cancel', 'action_cancel')
+      ]
+    ]);
+  },
+
+  /**
+   * Payment status selection keyboard for Income flow
+   */
+  paymentStatusSelection: () => {
+    return Markup.inlineKeyboard([
+      [
+        Markup.button.callback('✅ Fully Paid', 'inc_pay_paid'),
+        Markup.button.callback('⏳ Not Paid (Unpaid)', 'inc_pay_unpaid')
+      ],
+      [
+        Markup.button.callback('📦 Partial / Parcel Paid', 'inc_pay_partial')
+      ],
+      [
+        Markup.button.callback('❌ Cancel', 'action_cancel')
+      ]
+    ]);
+  },
+
+  /**
    * Goods Transactions Hub keyboard
    */
   goodsHub: () => {
@@ -270,6 +343,7 @@ const inlineKeyboards = {
         Markup.button.callback('📋 View Customer List', 'cust_action_list')
       ],
       [
+        Markup.button.callback('💰 Customer Dues & Balances', 'cust_action_dues'),
         Markup.button.callback('🔄 Toggle Active Status', 'cust_action_toggle')
       ],
       [
@@ -331,38 +405,47 @@ const inlineKeyboards = {
   },
 
   /**
-   * AI Analysis and Google Sheet Hub keyboard
+   * AI Analysis and Excel Download Hub keyboard
    */
-  aiAnalysisMenu: (sheetUrl) => {
-    const buttons = [];
-    if (sheetUrl && sheetUrl.startsWith('http')) {
-      buttons.push([Markup.button.url('📊 Open Google Sheet ↗️', sheetUrl)]);
-    }
-    buttons.push([
-      Markup.button.callback('📊 1. Full Business & Profit Audit', 'ai_prompt_profit')
+  aiAnalysisMenu: () => {
+    return Markup.inlineKeyboard([
+      [
+        Markup.button.callback('📥 Download Excel File (.xlsx)', 'action_download_excel')
+      ],
+      [
+        Markup.button.callback('📊 1. Full Business & Profit Audit', 'ai_prompt_profit')
+      ],
+      [
+        Markup.button.callback('👥 2. Customer & Sales Report', 'ai_prompt_customer'),
+        Markup.button.callback('👷 3. Wages & Labor Analysis', 'ai_prompt_wages')
+      ],
+      [
+        Markup.button.callback('📦 4. Goods Trade Margins', 'ai_prompt_goods'),
+        Markup.button.callback('✂️ 5. Expense Optimization', 'ai_prompt_expenses')
+      ],
+      [
+        Markup.button.callback('🏠 Back to Main Menu', 'action_main_menu')
+      ]
     ]);
-    buttons.push([
-      Markup.button.callback('👥 2. Customer & Sales Report', 'ai_prompt_customer'),
-      Markup.button.callback('👷 3. Wages & Labor Analysis', 'ai_prompt_wages')
-    ]);
-    buttons.push([
-      Markup.button.callback('📦 4. Goods Trade Margins', 'ai_prompt_goods'),
-      Markup.button.callback('✂️ 5. Expense Optimization', 'ai_prompt_expenses')
-    ]);
-    buttons.push([
-      Markup.button.callback('🏠 Back to Main Menu', 'action_main_menu')
-    ]);
-    return Markup.inlineKeyboard(buttons);
   },
 
   /**
-   * Individual AI prompt detail keyboard
+   * Individual AI prompt detail keyboard with 1-tap copy button and Excel download
    */
-  aiPromptDetail: (sheetUrl, currentKey) => {
+  aiPromptDetail: (promptText, currentKey) => {
     const buttons = [];
-    if (sheetUrl && sheetUrl.startsWith('http')) {
-      buttons.push([Markup.button.url('📊 Open Google Sheet ↗️', sheetUrl)]);
+    if (promptText) {
+      buttons.push([
+        { text: '📋 Copy Prompt to Clipboard', copy_text: { text: promptText } }
+      ]);
     }
+    buttons.push([
+      Markup.button.callback('📥 Download Excel File (.xlsx)', 'action_download_excel')
+    ]);
+    buttons.push([
+      Markup.button.callback('💬 Send Prompt as Clean Message', `send_raw_prompt_${currentKey}`)
+    ]);
+
     const prompts = [
       { key: 'ai_prompt_profit', label: '📊 Profit Audit' },
       { key: 'ai_prompt_customer', label: '👥 Customers' },
@@ -384,7 +467,82 @@ const inlineKeyboards = {
       Markup.button.callback('🏠 Main Menu', 'action_main_menu')
     ]);
     return Markup.inlineKeyboard(buttons);
+  },
+
+  /**
+   * Buttons attached to delivered Excel file
+   */
+  excelFileDelivered: (promptText = null) => {
+    const buttons = [];
+    if (promptText) {
+      buttons.push([
+        { text: '📋 Copy Profit Audit Prompt', copy_text: { text: promptText } }
+      ]);
+    }
+    buttons.push([
+      Markup.button.callback('🤖 View All AI Prompts', 'menu_ai_analysis'),
+      Markup.button.callback('🏠 Main Menu', 'action_main_menu')
+    ]);
+    return Markup.inlineKeyboard(buttons);
+  },
+
+  /**
+   * Executive Dashboard keyboard with period toggles and webapp launcher
+   */
+  dashboard: (activePeriod = 'month', dashboardUrl = null) => {
+    const pBtn = (id, label) => {
+      const isActive = activePeriod === id;
+      const text = isActive ? `• ${label} •` : label;
+      return Markup.button.callback(text, `dash_p_${id}`);
+    };
+
+    const rows = [
+      // 1. Period switcher
+      [
+        pBtn('today', '⚡ Today'),
+        pBtn('week', '🗓️ 7 Days'),
+        pBtn('month', '📅 Month'),
+        pBtn('all', '🌐 All-Time')
+      ],
+      // 2. Deep Dive Sub-views
+      [
+        Markup.button.callback('📦 Goods Trade', `dash_sub_goods_${activePeriod}`),
+        Markup.button.callback('👷 Wages List', `dash_sub_wages_${activePeriod}`)
+      ]
+    ];
+
+    // 3. Web Dashboard / Telegram Mini App button
+    if (dashboardUrl) {
+      if (dashboardUrl.startsWith('https://')) {
+        rows.push([
+          Markup.button.webApp('🚀 Launch Visual Web App 📱', dashboardUrl)
+        ]);
+      } else {
+        rows.push([
+          Markup.button.url('🌐 Open Web Dashboard ↗️', dashboardUrl)
+        ]);
+      }
+    }
+
+    // 4. Refresh & Navigation
+    rows.push([
+      Markup.button.callback('🔄 Refresh', `dash_refresh_${activePeriod}`),
+      Markup.button.callback('🏠 Main Menu', 'action_main_menu')
+    ]);
+
+    return Markup.inlineKeyboard(rows);
+  },
+
+  /**
+   * Return from sub-view to main dashboard
+   */
+  dashboardSubView: (activePeriod = 'month') => {
+    return Markup.inlineKeyboard([
+      [Markup.button.callback('⬅️ Back to Dashboard', `dash_p_${activePeriod}`)],
+      [Markup.button.callback('🏠 Main Menu', 'action_main_menu')]
+    ]);
   }
 };
 
 module.exports = inlineKeyboards;
+

@@ -177,13 +177,11 @@ describe('AI Analysis & Google Sheet Hub', () => {
     assert.ok(buttonsFlat.some(b => b.callback_data === 'menu_ai_analysis'));
   });
 
-  test('aiAnalysisMenu includes open sheet url button and prompts', () => {
-    const testUrl = 'https://docs.google.com/spreadsheets/d/test1234/edit';
-    const menu = inlineKeyboards.aiAnalysisMenu(testUrl);
+  test('aiAnalysisMenu includes download excel button and prompts', () => {
+    const menu = inlineKeyboards.aiAnalysisMenu();
     const buttonsFlat = menu.reply_markup.inline_keyboard.flat();
 
-    const urlBtn = buttonsFlat.find(b => b.url === testUrl);
-    assert.ok(urlBtn, 'Should have url button for Google Sheet');
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'action_download_excel'), 'Should have Excel download button');
     assert.ok(buttonsFlat.some(b => b.callback_data === 'ai_prompt_profit'));
     assert.ok(buttonsFlat.some(b => b.callback_data === 'ai_prompt_customer'));
     assert.ok(buttonsFlat.some(b => b.callback_data === 'ai_prompt_wages'));
@@ -191,10 +189,21 @@ describe('AI Analysis & Google Sheet Hub', () => {
     assert.ok(buttonsFlat.some(b => b.callback_data === 'ai_prompt_expenses'));
   });
 
-  test('AI_PROMPTS generate valid prompts containing sheet link', () => {
-    const testUrl = 'https://docs.google.com/spreadsheets/d/test1234/edit';
-    const promptKeys = Object.keys(AI_PROMPTS);
+  test('aiPromptDetail includes copy_text button and Excel download button', () => {
+    const samplePrompt = 'Act as an expert CFO...';
+    const detail = inlineKeyboards.aiPromptDetail(samplePrompt, 'ai_prompt_profit');
+    const buttonsFlat = detail.reply_markup.inline_keyboard.flat();
 
+    const copyBtn = buttonsFlat.find(b => b.copy_text && b.copy_text.text === samplePrompt);
+    assert.ok(copyBtn, 'Should have native copy_text button with prompt text');
+    assert.match(copyBtn.text, /Copy Prompt/);
+
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'action_download_excel'), 'Should have Excel download button');
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'send_raw_prompt_ai_prompt_profit'), 'Should have clean text button');
+  });
+
+  test('AI_PROMPTS generate valid prompts tailored for Excel file', () => {
+    const promptKeys = Object.keys(AI_PROMPTS);
     assert.strictEqual(promptKeys.length, 5);
 
     promptKeys.forEach(key => {
@@ -203,14 +212,164 @@ describe('AI Analysis & Google Sheet Hub', () => {
       assert.ok(p.desc);
       assert.strictEqual(typeof p.prompt, 'function');
 
-      const text = p.prompt(testUrl);
-      assert.ok(text.includes(testUrl), `Prompt ${key} should include the spreadsheet URL`);
+      const text = p.prompt();
+      assert.ok(text.includes('Rubber_Business_Ledger.xlsx'), `Prompt ${key} should reference the Excel ledger file`);
       assert.ok(text.length > 50, `Prompt ${key} should be descriptive`);
     });
   });
 
-  test('sheetsService getSpreadsheetUrl returns valid google docs link', () => {
-    const url = sheetsService.getSpreadsheetUrl();
-    assert.ok(url.startsWith('https://docs.google.com/spreadsheets/'));
+  test('sheetsService generateExcelBuffer creates valid .xlsx buffer', async () => {
+    const originalGetAllData = sheetsService.getAllData;
+    sheetsService.getAllData = async () => ({
+      success: true,
+      sheets: {
+        Transactions: [
+          ['Transaction ID', 'Date', 'Type', 'Category', 'Amount (₹)', 'Party', 'Staff', 'Route', 'Note'],
+          ['TXN-INC-20261019-0001', '2026-10-19', 'Income', 'Rubber Sales', 45000, 'ABC Rubber', '', '', 'Lot 1']
+        ],
+        Employees: [
+          ['Employee ID', 'Employee Name', 'Status'],
+          ['EMP-001', 'Suresh', 'Active']
+        ],
+        Customers: [
+          ['Customer ID', 'Customer Name', 'Status'],
+          ['CUST-001', 'ABC Rubber', 'Active']
+        ],
+        Categories: [
+          ['Type', 'Group', 'Category Name'],
+          ['Income', 'Rubber Sales', 'Rubber Sales']
+        ]
+      }
+    });
+
+    try {
+      const buffer = await sheetsService.generateExcelBuffer();
+      assert.ok(Buffer.isBuffer(buffer), 'Should return a valid Buffer');
+      assert.ok(buffer.length > 1000, 'Excel file buffer should not be empty');
+    } finally {
+      sheetsService.getAllData = originalGetAllData;
+    }
   });
 });
+
+describe('Executive Dashboard Hub (Telegram & Web)', () => {
+  const {
+    getPeriodDatesIST,
+    formatTelegramDashboard,
+    formatDashboardGoodsView,
+    formatDashboardWagesView
+  } = require('../src/utils/formatter');
+  const inlineKeyboards = require('../src/keyboards/inlineKeyboards');
+  const dashboardService = require('../src/services/dashboardService');
+  const { renderDashboardHtml } = require('../src/web/dashboardHtml');
+
+  test('mainMenu includes Executive Dashboard button', () => {
+    const menu = inlineKeyboards.mainMenu(false);
+    const buttonsFlat = menu.reply_markup.inline_keyboard.flat();
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'menu_dashboard'), 'Main menu should have menu_dashboard button');
+  });
+
+  test('getPeriodDatesIST resolves valid date ranges', () => {
+    const today = getPeriodDatesIST('today');
+    assert.strictEqual(today.startDate, today.endDate);
+    assert.match(today.startDate, /^\d{4}-\d{2}-\d{2}$/);
+
+    const week = getPeriodDatesIST('week');
+    assert.ok(week.startDate < week.endDate);
+
+    const month = getPeriodDatesIST('month');
+    assert.ok(month.startDate.endsWith('-01'));
+
+    const all = getPeriodDatesIST('all');
+    assert.strictEqual(all.startDate, '');
+    assert.strictEqual(all.endDate, '');
+  });
+
+  test('formatTelegramDashboard renders rich visual KPIs, balance bar and margin', () => {
+    const mockReport = {
+      startDate: '2026-10-01',
+      endDate: '2026-10-19',
+      totalIncome: 250000,
+      totalExpenses: 100000,
+      netCashflow: 150000,
+      goodsIncome: 120000,
+      goodsPurchases: 50000,
+      goodsDifference: 70000,
+      staffWages: 30000,
+      travelExpenses: 10000,
+      otherExpenses: 10000,
+      transactionCount: 20
+    };
+
+    const text = formatTelegramDashboard(mockReport, 'October 2026');
+    assert.match(text, /RUBBER EXECUTIVE DASHBOARD/);
+    assert.match(text, /Total Inflow:/);
+    assert.match(text, /2,50,000/);
+    assert.match(text, /Net Cashflow:/);
+    assert.match(text, /1,50,000/);
+    assert.match(text, /Surplus/);
+    assert.match(text, /🟩/); // Visual bar
+    assert.match(text, /Goods Difference:/);
+    assert.match(text, /Staff Wages:/);
+  });
+
+  test('inlineKeyboards.dashboard creates period toggles and webapp button', () => {
+    const kbHttps = inlineKeyboards.dashboard('month', 'https://example.com/dashboard');
+    const flatHttps = kbHttps.reply_markup.inline_keyboard.flat();
+
+    // Check period buttons
+    assert.ok(flatHttps.some(b => b.callback_data === 'dash_p_today'));
+    assert.ok(flatHttps.some(b => b.callback_data === 'dash_p_week'));
+    assert.ok(flatHttps.some(b => b.callback_data === 'dash_p_month'));
+    assert.ok(flatHttps.some(b => b.callback_data === 'dash_p_all'));
+
+    // Check subview buttons
+    assert.ok(flatHttps.some(b => b.callback_data === 'dash_sub_goods_month'));
+    assert.ok(flatHttps.some(b => b.callback_data === 'dash_sub_wages_month'));
+
+    // Check web_app button for HTTPS
+    const webAppBtn = flatHttps.find(b => b.web_app && b.web_app.url === 'https://example.com/dashboard');
+    assert.ok(webAppBtn, 'Should render web_app button for HTTPS URL');
+
+    // Check URL button for HTTP
+    const kbHttp = inlineKeyboards.dashboard('today', 'http://localhost:3000/dashboard');
+    const flatHttp = kbHttp.reply_markup.inline_keyboard.flat();
+    const urlBtn = flatHttp.find(b => b.url === 'http://localhost:3000/dashboard');
+    assert.ok(urlBtn, 'Should render URL button for non-HTTPS URL');
+  });
+
+  test('dashboardService.getDashboardData computes KPIs and time-series', async () => {
+    const data = await dashboardService.getDashboardData('month', null, null, true);
+    assert.strictEqual(data.success, true);
+    assert.ok(data.totalIncome > 0);
+    assert.ok(data.totalExpenses > 0);
+    assert.ok(data.kpis);
+    assert.ok(typeof data.kpis.netMarginPercent === 'number');
+    assert.ok(data.chartSeries);
+    assert.ok(Array.isArray(data.chartSeries.labels));
+    assert.ok(Array.isArray(data.chartSeries.income));
+    assert.ok(Array.isArray(data.chartSeries.expense));
+    assert.ok(Array.isArray(data.transactions));
+  });
+
+  test('renderDashboardHtml returns valid responsive HTML with Chart.js and Telegram SDK', () => {
+    const sampleData = {
+      success: true,
+      totalIncome: 100000,
+      totalExpenses: 50000,
+      netCashflow: 50000,
+      goodsDifference: 20000,
+      staffWages: 15000,
+      transactions: []
+    };
+
+    const html = renderDashboardHtml(sampleData);
+    assert.ok(html.includes('<!DOCTYPE html>'));
+    assert.ok(html.includes('chart.umd.min.js'));
+    assert.ok(html.includes('telegram-web-app.js'));
+    assert.ok(html.includes('Rubber Business Finance Hub'));
+    assert.ok(html.includes('trendChart'));
+    assert.ok(html.includes('categoryChart'));
+  });
+});
+

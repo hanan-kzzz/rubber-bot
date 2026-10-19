@@ -17,7 +17,8 @@ async function showMainMenu(ctx, isEdit = false) {
     `🌳 <b>Rubber Business Accounting Tracker</b>\n` +
     `━━━━━━━━━━━━━━━━━━━━━\n` +
     `Hello <b>${name}</b>! Welcome to your accounting bot.\n\n` +
-    `Tap any button below to record daily transactions, view financial reports, or track staff wages:\n` +
+    `Tap any button below to record daily transactions, view financial reports, or launch the interactive dashboard:\n` +
+    `• <b>👑 Executive Dashboard:</b> Interactive KPIs, charts & visual Web App\n` +
     `• <b>Income / Expense:</b> Record rubber sales & daily expenses\n` +
     `• <b>Staff Wages:</b> Record actual daily wages paid\n` +
     `• <b>Goods Transactions:</b> Track goods income vs purchases\n` +
@@ -49,6 +50,8 @@ async function showHelp(ctx) {
   const helpText = 
     `❓ <b>How to Use This Bot:</b>\n` +
     `━━━━━━━━━━━━━━━━━━━━━\n\n` +
+    `<b>0. 👑 Executive Dashboard (/dashboard):</b>\n` +
+    `Instant visual dashboard with period switchers (Today, 7 Days, Month, All-Time), visual cashflow bars, profit margins, and a 1-tap launch button for the visual Web App / Mini App with interactive charts.\n\n` +
     `<b>1. ➕ Add Income:</b>\n` +
     `Record rubber sales, goods sales, customer payments, or other income.\n\n` +
     `<b>2. ➖ Add Expense:</b>\n` +
