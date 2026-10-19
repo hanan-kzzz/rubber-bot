@@ -328,7 +328,7 @@ function initSheets() {
   return {
     success: true,
     message: "Sheets verified and initialized successfully",
-    sheets: [SHEET_TRANSACTIONS, SHEET_EMPLOYEES, SHEET_CATEGORIES]
+    sheets: [SHEET_TRANSACTIONS, SHEET_EMPLOYEES, SHEET_CUSTOMERS, SHEET_CATEGORIES]
   };
 }
 
