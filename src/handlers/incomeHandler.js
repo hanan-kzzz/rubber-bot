@@ -97,15 +97,39 @@ async function handleIncomeTextInput(ctx) {
       );
     }
 
+    // Fetch active customers from Google Sheets
+    let customers = [];
+    try {
+      const res = await sheetsService.getCustomers(true);
+      if (res && res.success && Array.isArray(res.customers)) {
+        customers = res.customers;
+      }
+    } catch (e) {
+      logger.warn('Could not fetch active customers for income flow:', e.message);
+    }
+
     sessionStore.update(userId, {
       step: 'AWAITING_SOURCE',
-      data: { amount }
+      data: {
+        amount,
+        _availableCustomers: customers
+      }
     });
+
+    if (customers.length > 0) {
+      return ctx.replyWithHTML(
+        `✅ Amount: <b>${formatINR(amount)}</b>\n\n` +
+        `👤 <b>Select or Enter Customer / Buyer Name:</b>\n` +
+        `<i>(Tap a customer below, or type the name directly in chat)</i>`,
+        inlineKeyboards.customerSelection(customers)
+      );
+    }
 
     return ctx.replyWithHTML(
       `✅ Amount: <b>${formatINR(amount)}</b>\n\n` +
       `👤 <b>Enter the Income Source or Customer Name:</b>\n` +
-      `<i>(e.g., 'Kottayam Rubber Traders', 'Suresh Kumar', 'Direct Sale')</i>`,
+      `<i>(e.g., 'Kottayam Rubber Traders', 'Suresh Kumar', 'Direct Sale')\n` +
+      `New customer names will be auto-saved to your Customer Directory.</i>`,
       inlineKeyboards.cancelOnly()
     );
   }
@@ -118,10 +142,14 @@ async function handleIncomeTextInput(ctx) {
 
     sessionStore.update(userId, {
       step: 'AWAITING_DATE',
-      data: { sourceOrPurpose: text }
+      data: {
+        sourceOrPurpose: text,
+        customerName: text
+      }
     });
 
     return ctx.replyWithHTML(
+      `👤 Customer: <b>${escapeHtml(text)}</b>\n\n` +
       `📅 <b>Select Transaction Date:</b>\n` +
       `Choose today, yesterday, or type a custom date:`,
       inlineKeyboards.dateSelection()
@@ -251,6 +279,72 @@ async function showIncomeConfirmation(ctx) {
 }
 
 /**
+ * Handle customer selected from quick button or custom prompt
+ */
+async function handleCustomerSelection(ctx, callbackData) {
+  const userId = ctx.from.id;
+  const session = sessionStore.get(userId);
+
+  if (!session || session.flow !== FLOW) return false;
+
+  if (callbackData === 'inc_cust_custom') {
+    sessionStore.update(userId, {
+      step: 'AWAITING_SOURCE'
+    });
+
+    const text = 
+      `✍️ <b>Enter Customer / Buyer Name</b>\n` +
+      `Please reply with the customer name:`;
+
+    if (ctx.callbackQuery) {
+      try {
+        return await ctx.editMessageText(text, {
+          parse_mode: 'HTML',
+          ...inlineKeyboards.cancelOnly()
+        });
+      } catch (e) {}
+    }
+    return ctx.replyWithHTML(text, inlineKeyboards.cancelOnly());
+  }
+
+  // Format: inc_cust_<id>_<shortName>
+  const parts = callbackData.replace('inc_cust_', '').split('_');
+  const custId = parts[0];
+  let customerName = parts.slice(1).join('_');
+
+  // If available in cached customer list, use full name
+  const available = session.data?._availableCustomers || [];
+  const found = available.find(c => c.id === custId);
+  if (found && found.name) {
+    customerName = found.name;
+  }
+
+  sessionStore.update(userId, {
+    step: 'AWAITING_DATE',
+    data: {
+      sourceOrPurpose: customerName,
+      customerName: customerName
+    }
+  });
+
+  const text = 
+    `👤 Customer: <b>${escapeHtml(customerName)}</b>\n\n` +
+    `📅 <b>Select Transaction Date:</b>\n` +
+    `Choose today, yesterday, or type a custom date:`;
+
+  if (ctx.callbackQuery) {
+    try {
+      return await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        ...inlineKeyboards.dateSelection()
+      });
+    } catch (e) {}
+  }
+
+  return ctx.replyWithHTML(text, inlineKeyboards.dateSelection());
+}
+
+/**
  * Handle final save confirmation
  */
 async function handleConfirmSave(ctx) {
@@ -297,6 +391,14 @@ async function handleConfirmSave(ctx) {
       );
     }
 
+    // Auto-register customer in Customers sheet if not already registered
+    const custName = session.data.customerName || session.data.sourceOrPurpose;
+    if (custName && custName.length >= 2) {
+      sheetsService.addCustomer(custName).catch(err => {
+        logger.warn(`Could not auto-add customer "${custName}":`, err.message);
+      });
+    }
+
     // Successfully saved
     sessionStore.clear(userId);
 
@@ -324,6 +426,7 @@ async function handleConfirmSave(ctx) {
 module.exports = {
   startIncomeFlow,
   handleCategorySelection,
+  handleCustomerSelection,
   handleIncomeTextInput,
   handleDateSelection,
   handleSkipNote,

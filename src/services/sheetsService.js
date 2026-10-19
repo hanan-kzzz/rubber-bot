@@ -124,6 +124,27 @@ class SheetsService {
   }
 
   /**
+   * Get list of customers
+   */
+  async getCustomers(activeOnly = false) {
+    return this.request('getCustomers', { activeOnly });
+  }
+
+  /**
+   * Add a new customer
+   */
+  async addCustomer(name, status = 'Active') {
+    return this.request('addCustomer', { data: { name, status } });
+  }
+
+  /**
+   * Toggle customer active/inactive status
+   */
+  async toggleCustomerStatus(customerId) {
+    return this.request('toggleCustomerStatus', { customerId });
+  }
+
+  /**
    * Get income and expense categories
    */
   async getCategories() {

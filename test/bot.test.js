@@ -117,3 +117,51 @@ describe('Report and Summary Formatting', () => {
     assert.match(formatted, /30,000/);
   });
 });
+
+describe('Customer Keyboards & Services', () => {
+  const inlineKeyboards = require('../src/keyboards/inlineKeyboards');
+  const sheetsService = require('../src/services/sheetsService');
+
+  test('mainMenu includes customer management button for owner', () => {
+    const ownerMenu = inlineKeyboards.mainMenu(true);
+    const buttonsFlat = ownerMenu.reply_markup.inline_keyboard.flat();
+    const custBtn = buttonsFlat.find(b => b.callback_data === 'menu_customers');
+    assert.ok(custBtn, 'Customer management button should be in owner main menu');
+    assert.match(custBtn.text, /Customers/);
+  });
+
+  test('customerManagement keyboard renders management options', () => {
+    const kb = inlineKeyboards.customerManagement();
+    const buttonsFlat = kb.reply_markup.inline_keyboard.flat();
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'cust_action_add'));
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'cust_action_list'));
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'cust_action_toggle'));
+  });
+
+  test('customerSelection keyboard builds buttons and stays under 64 bytes limit', () => {
+    const mockCustomers = [
+      { id: 'CUST-001', name: 'Very Long Customer Company Name International Private Limited' },
+      { id: 'CUST-002', name: 'Kottayam Rubber' }
+    ];
+
+    const kb = inlineKeyboards.customerSelection(mockCustomers);
+    const buttonsFlat = kb.reply_markup.inline_keyboard.flat();
+
+    // Verify callback data length for each button
+    buttonsFlat.forEach(btn => {
+      assert.ok(
+        Buffer.byteLength(btn.callback_data, 'utf8') <= 64,
+        `Callback data "${btn.callback_data}" exceeds 64-byte Telegram limit!`
+      );
+    });
+
+    assert.ok(buttonsFlat.some(b => b.callback_data.startsWith('inc_cust_CUST-001')));
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'inc_cust_custom'));
+  });
+
+  test('sheetsService exposes customer methods', () => {
+    assert.strictEqual(typeof sheetsService.getCustomers, 'function');
+    assert.strictEqual(typeof sheetsService.addCustomer, 'function');
+    assert.strictEqual(typeof sheetsService.toggleCustomerStatus, 'function');
+  });
+});

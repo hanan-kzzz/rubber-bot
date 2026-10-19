@@ -64,6 +64,8 @@ async function showHelp(ctx) {
     `• <b>Custom Date:</b> Summary between any two dates\n\n` +
     `<b>7. 📄 Recent Records:</b>\n` +
     `Shows the latest 10 transactions recorded in your Google Sheet.\n\n` +
+    `<b>8. 🤝 Customer Directory (Admin):</b>\n` +
+    `Manage registered rubber buyers and customers. New customer names entered during Income recording are automatically added here for quick one-tap access.\n\n` +
     `💡 <i>Tip: You can press ❌ Cancel anytime to abort an in-progress entry.</i>`;
 
   return ctx.replyWithHTML(helpText, inlineKeyboards.returnToMainMenu());

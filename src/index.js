@@ -15,6 +15,7 @@ const { showMainMenu, showHelp } = require('./handlers/menuHandler');
 const {
   startIncomeFlow,
   handleCategorySelection,
+  handleCustomerSelection,
   handleIncomeTextInput,
   handleDateSelection: handleIncomeDate,
   handleSkipNote: handleIncomeSkipNote,
@@ -69,6 +70,15 @@ const {
   handleShowEmployeeWages,
   handleEmployeeTextInput
 } = require('./handlers/employeeHandler');
+
+const {
+  showCustomerMenu,
+  startAddCustomer,
+  showCustomerList,
+  showToggleCustomerStatusMenu,
+  handleToggleCustomerStatusAction,
+  handleCustomerTextInput
+} = require('./handlers/customerHandler');
 
 const { showRecentTransactions } = require('./handlers/recentHandler');
 
@@ -142,6 +152,8 @@ bot.command('travel', async (ctx) => startTravelFlow(ctx));
 bot.command('report', async (ctx) => handleDailyReport(ctx));
 bot.command('goods', async (ctx) => showGoodsSummary(ctx, 'month'));
 bot.command('recent', async (ctx) => showRecentTransactions(ctx));
+bot.command(['employees', 'employee'], async (ctx) => showEmployeeMenu(ctx));
+bot.command(['customers', 'customer'], async (ctx) => showCustomerMenu(ctx));
 
 // ==========================================
 // 2. CALLBACK QUERY ROUTING
@@ -298,6 +310,20 @@ bot.on('callback_query', async (ctx) => {
       }
     }
 
+    if (session.flow === 'CUSTOMER_MGMT') {
+      if (session.step === 'AWAITING_ADD_NAME') {
+        return ctx.editMessageText(`➕ <b>Enter customer or company name:</b>`, { parse_mode: 'HTML', ...inlineKeyboards.cancelOnly() });
+      }
+      return showCustomerMenu(ctx);
+    }
+
+    if (session.flow === 'EMPLOYEE_MGMT') {
+      if (session.step === 'AWAITING_ADD_NAME') {
+        return ctx.editMessageText(`➕ <b>Enter employee full name:</b>`, { parse_mode: 'HTML', ...inlineKeyboards.cancelOnly() });
+      }
+      return showEmployeeMenu(ctx);
+    }
+
     return showMainMenu(ctx, true);
   }
 
@@ -318,10 +344,14 @@ bot.on('callback_query', async (ctx) => {
   if (data === 'menu_recent') return showRecentTransactions(ctx);
   if (data === 'menu_help') return showHelp(ctx);
   if (data === 'menu_employees') return showEmployeeMenu(ctx);
+  if (data === 'menu_customers') return showCustomerMenu(ctx);
 
-  // Income Category Selection
+  // Income Category and Customer Selection
   if (data.startsWith('inc_cat_')) {
     return handleCategorySelection(ctx, data);
+  }
+  if (data.startsWith('inc_cust_')) {
+    return handleCustomerSelection(ctx, data);
   }
 
   // Expense Groups and Categories
@@ -373,6 +403,15 @@ bot.on('callback_query', async (ctx) => {
   if (data.startsWith('emp_wages_')) {
     const target = data.replace('emp_wages_', '');
     return handleShowEmployeeWages(ctx, target);
+  }
+
+  // Customer Management Actions (Admin)
+  if (data === 'cust_action_add') return startAddCustomer(ctx);
+  if (data === 'cust_action_list') return showCustomerList(ctx);
+  if (data === 'cust_action_toggle') return showToggleCustomerStatusMenu(ctx);
+  if (data.startsWith('cust_toggle_')) {
+    const custId = data.replace('cust_toggle_', '');
+    return handleToggleCustomerStatusAction(ctx, custId);
   }
 
   // Date Selection Routing (routes to active wizard flow)
@@ -454,6 +493,11 @@ bot.on('text', async (ctx) => {
 
   if (session.flow === 'EMPLOYEE_MGMT') {
     const handled = await handleEmployeeTextInput(ctx);
+    if (handled !== false) return;
+  }
+
+  if (session.flow === 'CUSTOMER_MGMT') {
+    const handled = await handleCustomerTextInput(ctx);
     if (handled !== false) return;
   }
 });

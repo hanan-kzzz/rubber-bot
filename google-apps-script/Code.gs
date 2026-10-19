@@ -33,6 +33,7 @@ var SCRIPT_SECRET = "my_secure_rubber_bot_secret_2026";
 // Sheet Names
 var SHEET_TRANSACTIONS = "Transactions";
 var SHEET_EMPLOYEES = "Employees";
+var SHEET_CUSTOMERS = "Customers";
 var SHEET_CATEGORIES = "Categories";
 
 /**
@@ -101,6 +102,18 @@ function doPost(e) {
 
       case "getCategories":
         result = handleGetCategories();
+        break;
+
+      case "getCustomers":
+        result = handleGetCustomers(requestData.activeOnly);
+        break;
+
+      case "addCustomer":
+        result = handleAddCustomer(requestData.data);
+        break;
+
+      case "toggleCustomerStatus":
+        result = handleToggleCustomerStatus(requestData.customerId);
         break;
 
       default:
@@ -231,7 +244,24 @@ function initSheets() {
     empSheet.setColumnWidth(3, 120);
   }
 
-  // 3. Categories Sheet
+  // 3. Customers Sheet
+  var custSheet = ss.getSheetByName(SHEET_CUSTOMERS);
+  if (!custSheet) {
+    custSheet = ss.insertSheet(SHEET_CUSTOMERS);
+    var custHeaders = ["Customer ID", "Customer Name", "Active Status"];
+    custSheet.appendRow(custHeaders);
+    var custHeaderRange = custSheet.getRange(1, 1, 1, custHeaders.length);
+    custHeaderRange.setBackground("#4a148c"); // Deep Purple
+    custHeaderRange.setFontColor("#ffffff");
+    custHeaderRange.setFontWeight("bold");
+    custHeaderRange.setHorizontalAlignment("center");
+    custSheet.setFrozenRows(1);
+    custSheet.setColumnWidth(1, 130);
+    custSheet.setColumnWidth(2, 220);
+    custSheet.setColumnWidth(3, 120);
+  }
+
+  // 4. Categories Sheet
   var catSheet = ss.getSheetByName(SHEET_CATEGORIES);
   if (!catSheet) {
     catSheet = ss.insertSheet(SHEET_CATEGORIES);
@@ -658,6 +688,126 @@ function handleToggleEmployeeStatus(employeeId) {
   }
 
   return { success: false, error: "Employee with ID " + employeeId + " not found" };
+}
+
+/**
+ * Get list of customers
+ */
+function handleGetCustomers(activeOnly) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_CUSTOMERS);
+  if (!sheet) {
+    initSheets();
+    sheet = ss.getSheetByName(SHEET_CUSTOMERS);
+  }
+  if (!sheet || sheet.getLastRow() <= 1) {
+    return { success: true, customers: [] };
+  }
+
+  var values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues();
+  var customers = [];
+
+  for (var i = 0; i < values.length; i++) {
+    var id = String(values[i][0]).trim();
+    var name = String(values[i][1]).trim();
+    var status = String(values[i][2]).trim();
+
+    if (!name) continue;
+
+    if (activeOnly && status.toLowerCase() !== "active") {
+      continue;
+    }
+
+    customers.push({
+      id: id,
+      name: name,
+      status: status || "Active"
+    });
+  }
+
+  return { success: true, customers: customers };
+}
+
+/**
+ * Add a new customer
+ */
+function handleAddCustomer(data) {
+  if (!data || !data.name || !data.name.trim()) {
+    return { success: false, error: "Customer name is required" };
+  }
+
+  var name = data.name.trim();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_CUSTOMERS);
+  if (!sheet) {
+    initSheets();
+    sheet = ss.getSheetByName(SHEET_CUSTOMERS);
+  }
+
+  var lastRow = sheet.getLastRow();
+  var nextNum = 1;
+
+  if (lastRow > 1) {
+    var values = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+    for (var i = 0; i < values.length; i++) {
+      if (String(values[i][1]).trim().toLowerCase() === name.toLowerCase()) {
+        return {
+          success: true,
+          alreadyExists: true,
+          customer: { id: values[i][0], name: values[i][1], status: "Active" }
+        };
+      }
+    }
+    nextNum = lastRow;
+  }
+
+  var custId = "CUST-" + ("00" + nextNum).slice(-3);
+  var status = data.status || "Active";
+
+  sheet.appendRow([custId, name, status]);
+
+  return {
+    success: true,
+    customer: {
+      id: custId,
+      name: name,
+      status: status
+    }
+  };
+}
+
+/**
+ * Toggle customer active/inactive status
+ */
+function handleToggleCustomerStatus(customerId) {
+  if (!customerId) {
+    return { success: false, error: "Customer ID is required" };
+  }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_CUSTOMERS);
+  if (!sheet || sheet.getLastRow() <= 1) {
+    return { success: false, error: "No customers found" };
+  }
+
+  var values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues();
+  for (var i = 0; i < values.length; i++) {
+    if (String(values[i][0]).trim() === customerId) {
+      var currentStatus = String(values[i][2]).trim();
+      var newStatus = (currentStatus.toLowerCase() === "active") ? "Inactive" : "Active";
+      var rowToUpdate = i + 2;
+      sheet.getRange(rowToUpdate, 3).setValue(newStatus);
+
+      return {
+        success: true,
+        customerId: customerId,
+        name: values[i][1],
+        newStatus: newStatus
+      };
+    }
+  }
+
+  return { success: false, error: "Customer with ID " + customerId + " not found" };
 }
 
 /**

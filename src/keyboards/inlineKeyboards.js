@@ -32,7 +32,8 @@ const inlineKeyboards = {
 
     if (isOwner) {
       buttons.push([
-        Markup.button.callback('👥 Manage Employees (Admin)', 'menu_employees')
+        Markup.button.callback('👥 Employees (Admin)', 'menu_employees'),
+        Markup.button.callback('🤝 Customers (Admin)', 'menu_customers')
       ]);
     }
 
@@ -242,6 +243,46 @@ const inlineKeyboards = {
         Markup.button.callback('🏠 Main Menu', 'action_main_menu')
       ]
     ]);
+  },
+
+  /**
+   * Customer management hub (Admin/Owner only)
+   */
+  customerManagement: () => {
+    return Markup.inlineKeyboard([
+      [
+        Markup.button.callback('➕ Add New Customer', 'cust_action_add'),
+        Markup.button.callback('📋 View Customer List', 'cust_action_list')
+      ],
+      [
+        Markup.button.callback('🔄 Toggle Active Status', 'cust_action_toggle')
+      ],
+      [
+        Markup.button.callback('🏠 Main Menu', 'action_main_menu')
+      ]
+    ]);
+  },
+
+  /**
+   * Customer selection inline keyboard for Income flow
+   */
+  customerSelection: (customers = []) => {
+    const buttons = [];
+    for (let i = 0; i < customers.length; i += 2) {
+      const row = [];
+      const c1 = customers[i];
+      const c1Short = c1.name.slice(0, 25);
+      row.push(Markup.button.callback(`👤 ${c1.name}`, `inc_cust_${c1.id}_${c1Short}`));
+      if (customers[i + 1]) {
+        const c2 = customers[i + 1];
+        const c2Short = c2.name.slice(0, 25);
+        row.push(Markup.button.callback(`👤 ${c2.name}`, `inc_cust_${c2.id}_${c2Short}`));
+      }
+      buttons.push(row);
+    }
+    buttons.push([Markup.button.callback('✍️ Enter Other Customer', 'inc_cust_custom')]);
+    buttons.push([Markup.button.callback('❌ Cancel', 'action_cancel')]);
+    return Markup.inlineKeyboard(buttons);
   },
 
   /**
