@@ -47,6 +47,10 @@ A complete, production-ready Telegram accounting tracker designed specifically f
   - **Monthly Report:** Comprehensive figures for current month.
   - **Custom Date Report:** Select any start and end date (`YYYY-MM-DD`).
   - Clear **Net Cashflow** definition (`Total Income − Total Expenses`).
+- **Dedicated Customer Directory & Auto-Storage:**
+  - Registered customers and buyers appear as quick one-tap buttons when entering income.
+  - Any new customer name entered during income recording is automatically saved to the `Customers` sheet.
+  - Admin-only menu to view customer directory, add new customers, and toggle Active/Inactive status.
 - **Owner-Controlled Employee Management:**
   - Admin-only buttons to add workers, view directory, toggle Active/Inactive status, and view recorded wage breakdowns.
 - **Strict Role-Based Security:**
@@ -54,7 +58,7 @@ A complete, production-ready Telegram accounting tracker designed specifically f
   - Owner gets admin privileges; authorized staff can record transactions and view reports.
   - Unrecognized users are locked out and informed of their numeric ID.
 - **Auto-Initializing Google Sheets Ledger:**
-  - Automatically creates and formats `Transactions`, `Employees`, and `Categories` sheets with freeze rows, color headers, and INR formatting.
+  - Automatically creates and formats `Transactions`, `Employees`, `Customers`, and `Categories` sheets with freeze rows, color headers, and INR formatting.
 
 ---
 
