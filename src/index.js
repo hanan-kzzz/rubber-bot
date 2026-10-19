@@ -16,6 +16,7 @@ const {
   startIncomeFlow,
   handleCategorySelection,
   handleCustomerSelection,
+  handlePaymentStatusSelection,
   handleIncomeTextInput,
   handleDateSelection: handleIncomeDate,
   handleSkipNote: handleIncomeSkipNote,
@@ -75,12 +76,20 @@ const {
   showCustomerMenu,
   startAddCustomer,
   showCustomerList,
+  showCustomerDues,
   showToggleCustomerStatusMenu,
   handleToggleCustomerStatusAction,
   handleCustomerTextInput
 } = require('./handlers/customerHandler');
 
-const { showRecentTransactions } = require('./handlers/recentHandler');
+const {
+  showRecentTransactions,
+  showDeletePrompt,
+  showDeleteConfirmation,
+  startManualDeleteFlow,
+  handleDeleteTextInput,
+  executeDeleteTransaction
+} = require('./handlers/recentHandler');
 const {
   showAiAnalysisMenu,
   showAiPromptDetail,
@@ -160,7 +169,15 @@ bot.command('wages', async (ctx) => startWagesFlow(ctx));
 bot.command('travel', async (ctx) => startTravelFlow(ctx));
 bot.command('report', async (ctx) => handleDailyReport(ctx));
 bot.command('goods', async (ctx) => showGoodsSummary(ctx, 'month'));
-bot.command('recent', async (ctx) => showRecentTransactions(ctx));
+bot.command(['recent', 'records'], async (ctx) => showRecentTransactions(ctx));
+bot.command(['delete', 'remove'], async (ctx) => {
+  const parts = ctx.message.text.trim().split(/\s+/);
+  if (parts.length > 1 && parts[1].length >= 5) {
+    return showDeleteConfirmation(ctx, parts[1]);
+  }
+  return showDeletePrompt(ctx);
+});
+bot.command(['dues', 'balances', 'pending'], async (ctx) => showCustomerDues(ctx));
 bot.command(['employees', 'employee'], async (ctx) => showEmployeeMenu(ctx));
 bot.command(['customers', 'customer'], async (ctx) => showCustomerMenu(ctx));
 bot.command(['ai', 'sheet', 'sheets', 'analysis'], async (ctx) => showAiAnalysisMenu(ctx));
@@ -263,6 +280,12 @@ bot.on('callback_query', async (ctx) => {
       if (session.step === 'AWAITING_SOURCE') {
         return ctx.editMessageText(`👤 <b>Enter Customer/Source Name:</b>`, { parse_mode: 'HTML', ...inlineKeyboards.cancelOnly() });
       }
+      if (session.step === 'AWAITING_PAYMENT_STATUS') {
+        return ctx.editMessageText(`💳 <b>Select Payment Status:</b>`, { parse_mode: 'HTML', ...inlineKeyboards.paymentStatusSelection() });
+      }
+      if (session.step === 'AWAITING_PARTIAL_AMOUNT') {
+        return ctx.editMessageText(`📦 <b>Enter amount received now in ₹:</b>`, { parse_mode: 'HTML', ...inlineKeyboards.cancelOnly() });
+      }
       if (session.step === 'AWAITING_DATE') {
         return ctx.editMessageText(`📅 <b>Select Transaction Date:</b>`, { parse_mode: 'HTML', ...inlineKeyboards.dateSelection() });
       }
@@ -335,6 +358,10 @@ bot.on('callback_query', async (ctx) => {
       return showEmployeeMenu(ctx);
     }
 
+    if (session.flow === 'DELETE_TX') {
+      return startManualDeleteFlow(ctx);
+    }
+
     return showMainMenu(ctx, true);
   }
 
@@ -367,12 +394,31 @@ bot.on('callback_query', async (ctx) => {
     return handleSendRawPrompt(ctx, key);
   }
 
-  // Income Category and Customer Selection
+  // Income Category, Customer and Payment Status Selection
   if (data.startsWith('inc_cat_')) {
     return handleCategorySelection(ctx, data);
   }
   if (data.startsWith('inc_cust_')) {
     return handleCustomerSelection(ctx, data);
+  }
+  if (data.startsWith('inc_pay_')) {
+    return handlePaymentStatusSelection(ctx, data);
+  }
+
+  // Transaction Deletion Actions
+  if (data === 'recent_delete_prompt') {
+    return showDeletePrompt(ctx);
+  }
+  if (data === 'tx_del_manual') {
+    return startManualDeleteFlow(ctx);
+  }
+  if (data.startsWith('tx_del_pick_')) {
+    const txId = data.replace('tx_del_pick_', '');
+    return showDeleteConfirmation(ctx, txId);
+  }
+  if (data.startsWith('tx_del_confirm_')) {
+    const txId = data.replace('tx_del_confirm_', '');
+    return executeDeleteTransaction(ctx, txId);
   }
 
   // Expense Groups and Categories
@@ -429,6 +475,7 @@ bot.on('callback_query', async (ctx) => {
   // Customer Management Actions (Admin)
   if (data === 'cust_action_add') return startAddCustomer(ctx);
   if (data === 'cust_action_list') return showCustomerList(ctx);
+  if (data === 'cust_action_dues') return showCustomerDues(ctx);
   if (data === 'cust_action_toggle') return showToggleCustomerStatusMenu(ctx);
   if (data.startsWith('cust_toggle_')) {
     const custId = data.replace('cust_toggle_', '');
@@ -519,6 +566,11 @@ bot.on('text', async (ctx) => {
 
   if (session.flow === 'CUSTOMER_MGMT') {
     const handled = await handleCustomerTextInput(ctx);
+    if (handled !== false) return;
+  }
+
+  if (session.flow === 'DELETE_TX') {
+    const handled = await handleDeleteTextInput(ctx);
     if (handled !== false) return;
   }
 });

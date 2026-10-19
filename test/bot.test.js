@@ -373,3 +373,108 @@ describe('Executive Dashboard Hub (Telegram & Web)', () => {
   });
 });
 
+describe('Payment Status & Customer Balances', () => {
+  const inlineKeyboards = require('../src/keyboards/inlineKeyboards');
+  const { formatTransactionSummary } = require('../src/utils/formatter');
+
+  test('paymentStatusSelection keyboard renders Paid, Not Paid, and Partial Paid', () => {
+    const kb = inlineKeyboards.paymentStatusSelection();
+    const buttonsFlat = kb.reply_markup.inline_keyboard.flat();
+
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'inc_pay_paid'), 'Should have Fully Paid button');
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'inc_pay_unpaid'), 'Should have Not Paid button');
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'inc_pay_partial'), 'Should have Partial Paid button');
+  });
+
+  test('formatTransactionSummary correctly formats Fully Paid income', () => {
+    const tx = {
+      type: 'Income',
+      category: 'Rubber Sales',
+      amount: 45000,
+      sourceOrPurpose: 'Kottayam Rubber Traders',
+      paymentStatus: 'Paid',
+      paidAmount: 45000,
+      balanceDue: 0
+    };
+    const summary = formatTransactionSummary(tx);
+    assert.match(summary, /Fully Paid|Paid/);
+    assert.match(summary, /45,000/);
+  });
+
+  test('formatTransactionSummary correctly formats Not Paid (unpaid) income with due balance', () => {
+    const tx = {
+      type: 'Income',
+      category: 'Rubber Sales',
+      amount: 60000,
+      sourceOrPurpose: 'Apex Latex',
+      paymentStatus: 'Not Paid',
+      paidAmount: 0,
+      balanceDue: 60000
+    };
+    const summary = formatTransactionSummary(tx);
+    assert.match(summary, /Not Paid/);
+    assert.match(summary, /Customer Balance Due/);
+    assert.match(summary, /60,000/);
+  });
+
+  test('formatTransactionSummary correctly formats Partial / Parcel Paid income', () => {
+    const tx = {
+      type: 'Income',
+      category: 'Rubber Sales',
+      amount: 80000,
+      sourceOrPurpose: 'George Thomas',
+      paymentStatus: 'Partial Paid',
+      paidAmount: 30000,
+      balanceDue: 50000
+    };
+    const summary = formatTransactionSummary(tx);
+    assert.match(summary, /Partial \/ Parcel Paid/);
+    assert.match(summary, /Amount Received.*30,000/);
+    assert.match(summary, /Customer Balance Due.*50,000/);
+  });
+
+  test('customerManagement keyboard includes Customer Dues button', () => {
+    const kb = inlineKeyboards.customerManagement();
+    const buttonsFlat = kb.reply_markup.inline_keyboard.flat();
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'cust_action_dues'), 'Should have Customer Dues button');
+  });
+});
+
+describe('Transaction Deletion Feature', () => {
+  const inlineKeyboards = require('../src/keyboards/inlineKeyboards');
+  const sheetsService = require('../src/services/sheetsService');
+
+  test('sheetsService exposes deleteTransaction method', () => {
+    assert.strictEqual(typeof sheetsService.deleteTransaction, 'function');
+  });
+
+  test('recentActions includes delete transaction button', () => {
+    const kb = inlineKeyboards.recentActions(true);
+    const buttonsFlat = kb.reply_markup.inline_keyboard.flat();
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'recent_delete_prompt'), 'Should have Delete prompt button');
+  });
+
+  test('deletePickFromRecent renders selectable transaction buttons', () => {
+    const mockTxs = [
+      { id: 'TXN-INC-20261019-0001', type: 'Income', amount: 25000, category: 'Rubber Sales', sourceOrPurpose: 'Kottayam Rubber' },
+      { id: 'TXN-EXP-20261019-0002', type: 'Expense', amount: 1500, category: 'Staff Wages', employeeName: 'Ramu' }
+    ];
+    const kb = inlineKeyboards.deletePickFromRecent(mockTxs);
+    const buttonsFlat = kb.reply_markup.inline_keyboard.flat();
+
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'tx_del_pick_TXN-INC-20261019-0001'));
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'tx_del_pick_TXN-EXP-20261019-0002'));
+    assert.ok(buttonsFlat.some(b => b.callback_data === 'tx_del_manual'));
+  });
+
+  test('deleteConfirm keyboard generates valid confirmation callback', () => {
+    const txId = 'TXN-INC-20261019-0001';
+    const kb = inlineKeyboards.deleteConfirm(txId);
+    const buttonsFlat = kb.reply_markup.inline_keyboard.flat();
+
+    const confirmBtn = buttonsFlat.find(b => b.callback_data === `tx_del_confirm_${txId}`);
+    assert.ok(confirmBtn, 'Should have confirm delete button with txId');
+    assert.match(confirmBtn.text, /Delete/);
+  });
+});
+
